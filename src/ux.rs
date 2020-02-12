@@ -10,7 +10,7 @@ use tui::widgets::{
 };
 use tui::{Frame, Terminal};
 
-use super::app::{App, Todo};
+use super::app::{App, Todo, Note};
 
 pub fn draw<B: Backend>(terminal: &mut Terminal<B>, app: &App) -> Result<(), io::Error> {
     terminal.draw(|mut f| {
@@ -41,45 +41,43 @@ where
     let chunks = Layout::default()
         .constraints(
             [
-                Constraint::Percentage(75),
+                Constraint::Percentage(100),
                 Constraint::Percentage(25),
             ]
             .as_ref(),
         )
         .split(area);
-    draw_text(f, app, chunks[0]);
+    draw_main_page(f, app, chunks[0]);
 }
 
-fn draw_text<B>(f: &mut Frame<B>, app: &App, area: Rect)
+fn draw_main_page<B>(f: &mut Frame<B>, app: &App, area: Rect)
 where
     B: Backend,
 {
-    let text = [
-        Text::raw("This is a paragraph with several lines. You can change style your text the way you want.\n\nFox example: "),
-        Text::styled("under", Style::default().fg(Color::Red)),
-        Text::raw(" "),
-        Text::styled("the", Style::default().fg(Color::Green)),
-        Text::raw(" "),
-        Text::styled("rainbow", Style::default().fg(Color::Blue)),
-        Text::raw(".\nOh and if you didn't "),
-        Text::styled("notice", Style::default().modifier(Modifier::ITALIC)),
-        Text::raw(" you can "),
-        Text::styled("automatically", Style::default().modifier(Modifier::BOLD)),
-        Text::raw(" "),
-        Text::styled("wrap", Style::default().modifier(Modifier::REVERSED)),
-        Text::raw(" your "),
-        Text::styled("text", Style::default().modifier(Modifier::UNDERLINED)),
-        Text::raw(".\nOne more thing is that it should display unicode characters: 10€")
-    ];
-    Paragraph::new(text.iter())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("All Notes")
-                .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::BOLD)),
-        )
-        .wrap(true)
+    let chunks = Layout::default()
+        .constraints(vec![ Constraint::Percentage(100), ])
+        .direction(Direction::Horizontal)
+        .split(area);
+
+    Block::default()
+        .borders(Borders::ALL)
+        .title("Sticky Notes")
         .render(f, area);
+    
+    let chunks = Layout::default()
+        .constraints([Constraint::Percentage(25), Constraint::Percentage(50)].as_ref())
+        .direction(Direction::Horizontal)
+        .split(chunks[0]);
+
+    for todo in app.sticky_note.iter() {
+        SelectableList::default()
+            .block(Block::default().borders(Borders::ALL).title(todo.title))
+            .items(&todo.to_list().collect::<Vec<_>>())
+            .select(Some(app.sticky_note.selected))
+            .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
+            .highlight_symbol(">")
+            .render(f, chunks[0]);
+    }
 }
 
 fn draw_second_tab<B>(f: &mut Frame<B>, app: &App, area: Rect)

@@ -12,7 +12,7 @@ mod app;
 mod ux;
 
 use event::{EventHandle, Config, Event};
-use app::App;
+use app::{App, ListState, Note, Todo};
 
 fn main() -> Result<(), failure::Error> {
     let mut args = std::env::args();
@@ -32,7 +32,32 @@ fn main() -> Result<(), failure::Error> {
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new("Termion demo");
+    terminal.clear()?;
+
+    let items = vec![
+        "first",
+        "second",
+        "third",
+    ];
+    let items = items.into_iter()
+        .map(|s| Todo {
+            date: chrono::Local::now(),
+            task: s,
+            cmd: "",
+        })
+        .collect::<Vec<_>>();
+    let mut app = App::new("Forget It");
+    app.sticky_note = ListState::new(vec![
+        Note { 
+            title: "Note One",
+            list: ListState::new(items.clone()),
+        },
+        Note { 
+            title: "Note Two",
+            list: ListState::new(items.clone()),
+        },
+    ]);
+
     loop {
         ux::draw(&mut terminal, &app)?;
         match events.next()? {

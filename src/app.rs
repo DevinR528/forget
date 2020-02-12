@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local};
 
+#[derive(Clone, Debug)]
 pub struct TabsState<'a> {
     pub titles: Vec<&'a str>,
     pub index: usize,
@@ -21,6 +22,8 @@ impl<'a> TabsState<'a> {
         }
     }
 }
+
+#[derive(Clone, Debug)]
 
 pub struct ListState<I> {
     pub items: Vec<I>,
@@ -50,15 +53,23 @@ impl<I> ListState<I> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Todo<'a> {
     pub date: DateTime<Local>,
     pub task: &'a str,
     pub cmd: &'a str,
 }
 
+#[derive(Clone, Debug)]
 pub struct Note<'a> {
     pub title: &'a str,
     pub list: ListState<Todo<'a>>
+}
+
+impl<'a> Note<'a> {
+    pub fn to_list(&'a self) -> impl Iterator<Item = &'a str> {
+        self.list.iter().map(|t| t.task)
+    }
 }
 
 pub struct App<'a> {
@@ -72,14 +83,18 @@ impl<'a> App<'a> {
     pub fn new(title: &'a str) -> Self {
         let sticky_note = ListState::new(vec![
             Note {
-                title: "Note",
+                title: "Note One",
                 list: ListState::new(Vec::default()),
-            }
+            },
+            Note {
+                title: "Note Two",
+                list: ListState::new(Vec::default()),
+            },
         ]);
         App {
             title,
             should_quit: false,
-            tabs: TabsState::new(vec!["tab1", "tab2"]),
+            tabs: TabsState::new(sticky_note.items.iter().map(|n| n.title).collect()),
             sticky_note,
         }
     }
