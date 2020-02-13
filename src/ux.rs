@@ -3,14 +3,16 @@ use std::io;
 use tui::backend::Backend;
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::canvas::{Canvas, Line, Map, MapResolution, Rectangle};
 use tui::widgets::{
-    Axis, BarChart, Block, Borders, Chart, Dataset, Gauge, List, Marker, Paragraph, Row,
-    SelectableList, Sparkline, Table, Tabs, Text, Widget,
+    Block, Borders, Paragraph, SelectableList, Sparkline, Tabs, Text, Widget,
 };
 use tui::{Frame, Terminal};
 
-use super::app::{App, Todo, Note};
+use super::app::{App, Todo};
+
+const ADD_REMIND: &str = "Title of reminder: ";
+const ADD_TODO: &str = "What do you want ToDo: ";
+const ADD_CMD: &str = "Command to run: ";
 
 pub fn draw<B: Backend>(terminal: &mut Terminal<B>, app: &App) -> Result<(), io::Error> {
     terminal.draw(|mut f| {
@@ -19,33 +21,23 @@ pub fn draw<B: Backend>(terminal: &mut Terminal<B>, app: &App) -> Result<(), io:
             .split(f.size());
 
         Tabs::default()
-            .block(Block::default().borders(Borders::ALL).title(app.title))
+            .block(Block::default().borders(Borders::ALL).title(&app.title))
             .titles(&app.tabs.titles)
-            .style(Style::default().fg(Color::Green))
-            .highlight_style(Style::default().fg(Color::Yellow))
+            .style(Style::default().fg(Color::Gray))
+            .highlight_style(Style::default().fg(Color::Cyan))
             .select(app.tabs.index)
             .render(&mut f, chunks[0]);
 
-        match app.tabs.index {
-            0 => draw_first_tab(&mut f, &app, chunks[1]),
-            1 => draw_second_tab(&mut f, &app, chunks[1]),
-            _ => {}
-        };
+        draw_app(&mut f, &app, chunks[1])
     })
 }
 
-fn draw_first_tab<B>(f: &mut Frame<B>, app: &App, area: Rect)
+fn draw_app<B>(f: &mut Frame<B>, app: &App, area: Rect)
 where
     B: Backend,
 {
     let chunks = Layout::default()
-        .constraints(
-            [
-                Constraint::Percentage(100),
-                Constraint::Percentage(25),
-            ]
-            .as_ref(),
-        )
+        .constraints([Constraint::Percentage(100), Constraint::Percentage(25)].as_ref())
         .split(area);
     draw_main_page(f, app, chunks[0]);
 }
@@ -55,58 +47,93 @@ where
     B: Backend,
 {
     let chunks = Layout::default()
-        .constraints(vec![ Constraint::Percentage(100), ])
+        .constraints(vec![Constraint::Percentage(100)])
         .direction(Direction::Horizontal)
         .split(area);
 
-    Block::default()
-        .borders(Borders::ALL)
-        .title("Sticky Notes")
-        .render(f, area);
-    
+    // Block::default()
+    //     .borders(Borders::ALL)
+    //     .title("Sticky Notes")
+    //     .render(f, area);
+
     let chunks = Layout::default()
-        .constraints([Constraint::Percentage(25), Constraint::Percentage(50)].as_ref())
+        .constraints([Constraint::Percentage(65), Constraint::Percentage(45)].as_ref())
         .direction(Direction::Horizontal)
         .split(chunks[0]);
 
-    for todo in app.sticky_note.iter() {
-        SelectableList::default()
-            .block(Block::default().borders(Borders::ALL).title(todo.title))
-            .items(&todo.to_list().collect::<Vec<_>>())
-            .select(Some(app.sticky_note.selected))
-            .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
-            .highlight_symbol(">")
-            .render(f, chunks[0]);
-    }
+    let todo = &app.sticky_note[app.tabs.index];
+
+    SelectableList::default()
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(&todo.title)
+                .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
+        )
+        .items(&todo.to_list().collect::<Vec<_>>())
+        .select(Some(app.sticky_note.selected))
+        .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
+        .highlight_symbol(">")
+        .render(f, chunks[0]);
+
+    draw_util_block(f, app, chunks[1])
 }
 
-fn draw_second_tab<B>(f: &mut Frame<B>, app: &App, area: Rect)
+fn draw_util_block<B>(f: &mut Frame<B>, app: &App, area: Rect)
 where
     B: Backend,
 {
-    let chunks = Layout::default()
-        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)].as_ref())
-        .direction(Direction::Horizontal)
-        .split(area);
-    
-    let items = app.sticky_note.get_selected().unwrap();
-    let text = items.list.iter().enumerate().map(convert_text).collect::<Vec<_>>();
-    
-    Paragraph::new(text.iter())
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .title(items.title)
-            .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::BOLD))
-        )
-        .wrap(true)
-        .render(f, area);
+    if app.new_reminder {
+        let remind_title = &app.add_remind.title;
+        SelectableList::default()
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Add Sticky Note")
+                    .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
+            )
+            .items(&[&format!("{}{}", ADD_REMIND, remind_title)])
+            .select(Some(0))
+            .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
+            .highlight_symbol("*")
+            .render(f, area);
+    } else if app.new_todo {
+        let task = &app.add_todo.task;
+        let cmd = &app.add_todo.cmd;
+        SelectableList::default()
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Add ToDo Item")
+                    .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
+            )
+            .items(&[
+                    &format!("{}{}", ADD_TODO, task),
+                    &format!("{}{}", ADD_CMD, cmd),
+                ])
+            .select(Some(0))
+            .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
+            .highlight_symbol("*")
+            .render(f, area);
+    } else {
+        let note = &app.sticky_note[app.tabs.index].note;
+        let text = Text::styled(note, Style::default().fg(Color::Red).modifier(Modifier::BOLD));
+        Paragraph::new(vec![text].iter())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Add ToDo Item")
+                    .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
+            )
+            .render(f, area);
+    }
 }
 
 fn convert_text<'a>(pair: (usize, &'a Todo)) -> Text<'a> {
     let (idx, todo) = pair;
     if idx % 2 == 0 {
-        Text::styled(todo.task, Style::default().fg(Color::Blue))
+        Text::styled(&todo.task, Style::default().fg(Color::Blue))
     } else {
-        Text::styled(todo.task, Style::default().fg(Color::Green))
+        Text::styled(&todo.task, Style::default().fg(Color::Green))
     }
 }

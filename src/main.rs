@@ -12,7 +12,7 @@ mod app;
 mod ux;
 
 use event::{EventHandle, Config, Event};
-use app::{App, ListState, Note, Todo};
+use app::{App, ListState, Remind, Todo};
 
 fn main() -> Result<(), failure::Error> {
     let mut args = std::env::args();
@@ -33,50 +33,19 @@ fn main() -> Result<(), failure::Error> {
     let mut terminal = Terminal::new(backend)?;
 
     terminal.clear()?;
-
-    let items = vec![
-        "first",
-        "second",
-        "third",
-    ];
-    let items = items.into_iter()
-        .map(|s| Todo {
-            date: chrono::Local::now(),
-            task: s,
-            cmd: "",
-        })
-        .collect::<Vec<_>>();
+    
     let mut app = App::new("Forget It");
-    app.sticky_note = ListState::new(vec![
-        Note { 
-            title: "Note One",
-            list: ListState::new(items.clone()),
-        },
-        Note { 
-            title: "Note Two",
-            list: ListState::new(items.clone()),
-        },
-    ]);
 
     loop {
         ux::draw(&mut terminal, &app)?;
         match events.next()? {
             Event::Input(key) => match key {
-                Key::Char(c) => {
-                    app.on_key(c);
-                }
-                Key::Up => {
-                    app.on_up();
-                }
-                Key::Down => {
-                    app.on_down();
-                }
-                Key::Left => {
-                    app.on_left();
-                }
-                Key::Right => {
-                    app.on_right();
-                }
+                Key::Char(c) => app.on_key(c),
+                Key::Up => app.on_up(),
+                Key::Down => app.on_down(),
+                Key::Left => app.on_left(),
+                Key::Right => app.on_right(),
+                Key::Ctrl(c) => app.on_ctrl_key(c),
                 _ => {}
             },
             Event::Tick => {

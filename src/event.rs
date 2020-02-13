@@ -63,7 +63,7 @@ impl EventHandle {
                             if !ignore_exit_key.load(Ordering::Relaxed) && key == cfg.exit_key {
                                 return;
                             }
-                        },
+                        }
                         Err(e) => panic!("{:?}", e),
                     }
                 }
@@ -80,7 +80,12 @@ impl EventHandle {
             })
         };
 
-        EventHandle { recv, ignore_exit_key, input_handle, tick_handle, }
+        EventHandle {
+            recv,
+            ignore_exit_key,
+            input_handle,
+            tick_handle,
+        }
     }
 
     pub fn next(&self) -> Result<Event<Key>, mpsc::RecvError> {
