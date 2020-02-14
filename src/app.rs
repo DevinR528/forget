@@ -1,8 +1,37 @@
 use std::fs;
+use std::io;
+use std::path::Path;
 use std::ops::{Index, IndexMut};
 
-use tui::style::{Color, Modifier, Style};
-use chrono::{DateTime, Local};
+use chrono::{offset::TimeZone, DateTime, Local};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::{from_slice, from_str, to_string, to_vec};
+
+use crate::config::{CFG, open_cfg_file, save_cfg_file, AppConfig};
+
+mod date_fmt {
+    use super::*;
+
+    const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+    pub fn serialize<S>(date: &DateTime<Local>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = format!("{}", date.format(FORMAT));
+        serializer.serialize_str(&s)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Local>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Local
+            .datetime_from_str(&s, FORMAT)
+            .map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct TabsState {
@@ -27,7 +56,7 @@ impl TabsState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ListState<I> {
     pub items: Vec<I>,
     pub selected: usize,
@@ -53,8 +82,11 @@ impl<I> ListState<I> {
             self.selected -= 1;
         }
     }
-    
+
     pub fn select_next(&mut self) {
+        if self.len() == 0 {
+            return;
+        }
         if self.selected < self.len() - 1 {
             self.selected += 1
         }
@@ -130,21 +162,22 @@ impl Default for AddRemind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Todo {
+    #[serde(with = "date_fmt")]
     pub date: DateTime<Local>,
-    task: String,
+    pub task: String,
     pub cmd: String,
     pub completed: bool,
 }
 
 impl Todo {
-    pub fn as_str(&mut self) -> &str {
+    pub fn as_str(&self) -> &str {
         &self.task
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Remind {
     pub title: String,
     pub note: String,
@@ -152,13 +185,54 @@ pub struct Remind {
 }
 
 impl Remind {
-    pub fn to_list(&mut self) -> impl Iterator<Item = &str> {
-        self.list.iter_mut().map(|t| t.as_str())
+    pub fn to_list(&self) -> impl Iterator<Item = &str> {
+        self.list.iter().map(|t| t.as_str())
     }
 }
 
+fn open_db() -> ListState<Remind> {
+    let mut home = dirs::home_dir().expect("home dir not found");
+    home.push(".forget");
+    home.push("note_db.json");
+
+    // TODO make it the right file
+    if !Path::new("./note_db.json").exists() {
+        use std::io::Write;
+        crate::config::APP.with(|app| {
+            let json_str = serde_json::to_string(&app).expect("serialization failed");
+            let mut fd = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open("./note_db.json")
+                .expect("open file failed");
+
+            fd.write_all(json_str.as_bytes()).expect("write failed");
+        });
+    }
+
+    let json_raw = fs::read_to_string("./note_db.json").expect("failed to read database");
+    from_str::<ListState<Remind>>(&json_raw).expect("deserialization failed")
+}
+
+fn save_db(notes: &ListState<Remind>) -> io::Result<()> {
+    use std::io::Write;
+
+    let mut home = dirs::home_dir().expect("home dir not found");
+    home.push(".forget");
+
+    let json_str = serde_json::to_string(notes).expect("serialization failed");
+    let mut fd = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("./note_db.json")
+        .expect("open file failed");
+    fd.write_all(json_str.as_bytes())
+}
+
 #[derive(Debug)]
-pub struct App {
+pub struct App<'a> {
     pub title: String,
     pub tabs: TabsState,
     pub add_todo: AddTodo,
@@ -168,38 +242,18 @@ pub struct App {
     pub new_todo: bool,
     pub new_note: bool,
     pub sticky_note: ListState<Remind>,
+    pub config: AppConfig<'a>,
 }
 
-impl App {
-    pub fn new(title: &str) -> Self {
-        let items = vec![
-            "first",
-            "second",
-            "third",
-        ];
-        let items = items.into_iter()
-            .map(|s| Todo {
-                date: chrono::Local::now(),
-                task: s.into(),
-                cmd: "".into(),
-                completed: false,
-            })
-            .collect::<Vec<_>>();
-        let sticky_note = ListState::new(vec![
-            Remind {
-                title: "Note One".into(),
-                note: "This that and the other.".into(),
-                list: ListState::new(items.clone()),
-            },
-            Remind {
-                title: "Note Two".into(),
-                note: "Things to not forget.".into(),
-                list: ListState::new(items),
-            },
-        ]);
+impl<'a> App<'a> {
+    pub fn new() -> Self {
+        save_cfg_file(&CFG).expect("save cfg failed");
+
+        let sticky_note = open_db();
+        let config = open_cfg_file();
 
         App {
-            title: title.into(),
+            title: config.title.into(),
             add_todo: AddTodo::default(),
             add_remind: AddRemind::default(),
             should_quit: false,
@@ -208,6 +262,7 @@ impl App {
             new_todo: false,
             tabs: TabsState::new(sticky_note.items.iter().map(|n| n.title.clone()).collect()),
             sticky_note,
+            config,
         }
     }
 
@@ -303,8 +358,25 @@ impl App {
             }
         } else if self.new_note {
             self.sticky_note[self.tabs.index].note.pop();
+        } else if self.sticky_note[self.tabs.index].list.len() > 0 {
+            self.sticky_note[self.tabs.index]
+                .list
+                .get_selected_mut()
+                .completed = true;
+        }
+    }
+
+    pub fn on_delete(&mut self) {
+        if self.new_reminder || self.new_todo {
+            self.reset_addition();
+        } else if self.new_note {
+            self.sticky_note[self.tabs.index].note.pop();
         } else {
-            self.sticky_note[self.tabs.index].list.get_selected_mut().completed = true;
+            let idx = self.sticky_note[self.tabs.index].list.selected;
+            if idx > 0 {
+                self.sticky_note[self.tabs.index].list.selected -= 1;
+            }
+            self.sticky_note[self.tabs.index].list.items.remove(idx);
         }
     }
 
@@ -317,21 +389,33 @@ impl App {
     pub fn on_ctrl_key(&mut self, c: char) {
         match c {
             'q' => self.should_quit = true,
-            't' => {
+            c if c == self.config.new_todo_ctrl => {
                 let flag = self.new_todo;
                 self.reset_new_flag();
                 self.new_todo = !flag;
-            },
-            's' => {
+            }
+            c if c == self.config.new_sticky_note_ctrl => {
                 let flag = self.new_reminder;
                 self.reset_new_flag();
                 self.new_reminder = !flag;
-            },
-            'n' => {
+            }
+            c if c == self.config.new_note_ctrl => {
                 let flag = self.new_note;
                 self.reset_new_flag();
                 self.new_note = !flag;
-            },
+            }
+            c if c == self.config.remove_sticky_note_ctrl => {
+                if self.sticky_note.len() > 0 {
+                    let tab_idx = self.tabs.index;
+                    self.sticky_note.items.remove(tab_idx);
+                    self.sticky_note.select_next();
+                    self.tabs.titles.remove(tab_idx);
+                    self.tabs.previous();
+                }
+            }
+            c if c == self.config.save_state_to_db_ctrl => {
+                save_db(&self.sticky_note).expect("save to DB failed");
+            }
             _ => {}
         }
     }

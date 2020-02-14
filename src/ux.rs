@@ -3,16 +3,15 @@ use std::io;
 use tui::backend::Backend;
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::{
-    Block, Borders, Paragraph, SelectableList, Sparkline, Tabs, Text, Widget,
-};
+use tui::widgets::{Block, Borders, Paragraph, SelectableList, Sparkline, Tabs, Text, Widget};
 use tui::{Frame, Terminal};
 
 use super::app::{App, Todo};
+use super::widget::TodoList;
 
-const ADD_REMIND: &str = "Title of reminder: ";
-const ADD_TODO: &str = "What do you want ToDo: ";
-const ADD_CMD: &str = "Command to run: ";
+const ADD_REMIND: &str = "Title of Sticky Note";
+const ADD_TODO: &str = "What do you want Todo";
+const ADD_CMD: &str = "Command to run";
 
 pub fn draw<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(), io::Error> {
     terminal.draw(|mut f| {
@@ -56,20 +55,24 @@ where
         .direction(Direction::Horizontal)
         .split(chunks[0]);
 
-    let mut todo = app.sticky_note[app.tabs.index].clone();
-    let title = todo.title.clone();
+    let todo = &app.sticky_note[app.tabs.index];
 
-    SelectableList::default()
+    TodoList::new(todo)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(&title)
-                .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
+                .title(&todo.title)
+                .title_style(
+                    Style::default()
+                        .bg(Color::LightBlue)
+                        .fg(Color::Black)
+                        .modifier(Modifier::BOLD),
+                ),
         )
-        .items(&todo.to_list().collect::<Vec<_>>())
+        // .items(&todo.to_list().collect::<Vec<_>>())
         .select(Some(app.sticky_note[app.tabs.index].list.selected))
         .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
-        .highlight_symbol(">")
+        .highlight_symbol("✏️")
         .render(f, chunks[0]);
 
     draw_util_block(f, app, chunks[1])
@@ -81,44 +84,101 @@ where
 {
     if app.new_reminder {
         let remind_title = &app.add_remind.title;
-        SelectableList::default()
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Add Sticky Note")
-                    .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
-            )
-            .items(&[&format!("{}{}", ADD_REMIND, remind_title)])
-            .select(Some(0))
-            .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
-            .highlight_symbol("*")
-            .render(f, area);
+        let highlight_style = Style::default().fg(Color::Yellow);
+
+        Paragraph::new(
+            vec![Text::styled(
+                remind_title,
+                Style::default().fg(Color::Green),
+            )]
+            .iter(),
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(highlight_style)
+                .title(ADD_REMIND)
+                .title_style(
+                    Style::default()
+                        .bg(Color::Black)
+                        .fg(Color::Yellow)
+                        .modifier(Modifier::BOLD),
+                ),
+        )
+        .wrap(true)
+        .render(f, area);
     } else if app.new_todo {
         let task = &app.add_todo.task;
         let cmd = &app.add_todo.cmd;
-        SelectableList::default()
+        let question = app.add_todo.question_index;
+
+        let highlight_style = Style::default().fg(Color::Yellow);
+        let normal_style = Style::default().fg(Color::White);
+
+        let chunks = Layout::default()
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .direction(Direction::Vertical)
+            .split(area);
+
+        Paragraph::new(vec![Text::styled(task, Style::default().fg(Color::Green))].iter())
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("Add ToDo Item")
-                    .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
+                    .border_style(if question == 0 {
+                        highlight_style
+                    } else {
+                        normal_style
+                    })
+                    .title(ADD_TODO)
+                    .title_style(
+                        Style::default()
+                            .bg(Color::Black)
+                            .fg(if question == 0 {
+                                highlight_style.fg
+                            } else {
+                                normal_style.fg
+                            })
+                            .modifier(Modifier::BOLD),
+                    ),
             )
-            .items(&[
-                    &format!("{}{}", ADD_TODO, task),
-                    &format!("{}{}", ADD_CMD, cmd),
-                ])
-            .select(Some(app.add_todo.question_index))
-            .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
-            .highlight_symbol("*")
-            .render(f, area);
+            .wrap(true)
+            .render(f, chunks[0]);
+
+        Paragraph::new(vec![Text::styled(cmd, Style::default().fg(Color::Green))].iter())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(if question == 1 {
+                        highlight_style
+                    } else {
+                        normal_style
+                    })
+                    .title(ADD_CMD)
+                    .title_style(
+                        Style::default()
+                            .bg(Color::Black)
+                            .fg(if question == 0 {
+                                highlight_style.fg
+                            } else {
+                                normal_style.fg
+                            })
+                            .modifier(Modifier::BOLD),
+                    ),
+            )
+            .wrap(true)
+            .render(f, chunks[1]);
     } else {
         let note = &app.sticky_note[app.tabs.index].note;
-        let text = Text::styled(note, Style::default().fg(Color::Red).modifier(Modifier::BOLD));
+        let text = Text::styled(note, Style::default().fg(Color::Green));
         Paragraph::new(vec![text].iter())
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(if app.new_note { "Add To Notes" } else { "Notes" })
+                    .title(if app.new_note {
+                        "Add To Notes"
+                    } else {
+                        "Notes"
+                    })
                     .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
             )
             .wrap(true)
