@@ -19,7 +19,7 @@ fn main() -> Result<(), failure::Error> {
     let tick_rate = if let Some(tick) = args.find(|arg| arg.parse::<u64>().is_ok()) {
         tick.parse()?
     } else {
-        250
+        60
     };
 
     let events = EventHandle::with_config(Config {
@@ -37,14 +37,16 @@ fn main() -> Result<(), failure::Error> {
     let mut app = App::new("Forget It");
 
     loop {
-        ux::draw(&mut terminal, &app)?;
+        ux::draw(&mut terminal, &mut app)?;
         match events.next()? {
             Event::Input(key) => match key {
                 Key::Char(c) => app.on_key(c),
+                Key::Backspace => app.on_backspace(),
                 Key::Up => app.on_up(),
                 Key::Down => app.on_down(),
                 Key::Left => app.on_left(),
                 Key::Right => app.on_right(),
+                Key::Esc => app.on_ctrl_key('q'),
                 Key::Ctrl(c) => app.on_ctrl_key(c),
                 _ => {}
             },

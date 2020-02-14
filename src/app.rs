@@ -1,6 +1,7 @@
 use std::fs;
 use std::ops::{Index, IndexMut};
 
+use tui::style::{Color, Modifier, Style};
 use chrono::{DateTime, Local};
 
 #[derive(Clone, Debug)]
@@ -32,26 +33,44 @@ pub struct ListState<I> {
     pub selected: usize,
 }
 
+impl<I> Default for ListState<I> {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}
+
 impl<I> ListState<I> {
     pub fn new(items: Vec<I>) -> ListState<I> {
         ListState { items, selected: 0 }
     }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
     pub fn select_previous(&mut self) {
         if self.selected != 0 {
             self.selected -= 1;
         }
     }
+    
     pub fn select_next(&mut self) {
-        if self.selected < self.items.len() {
+        if self.selected < self.len() - 1 {
             self.selected += 1
         }
     }
-    pub fn get_selected(&self) -> Option<&I> {
-        self.items.get(self.selected)
+    pub fn get_selected(&self) -> &I {
+        self.items.get(self.selected).unwrap()
+    }
+    pub fn get_selected_mut(&mut self) -> &mut I {
+        self.items.get_mut(self.selected).unwrap()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &I> {
         self.items.iter()
+    }
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut I> {
+        self.items.iter_mut()
     }
 }
 
@@ -114,8 +133,15 @@ impl Default for AddRemind {
 #[derive(Clone, Debug)]
 pub struct Todo {
     pub date: DateTime<Local>,
-    pub task: String,
+    task: String,
     pub cmd: String,
+    pub completed: bool,
+}
+
+impl Todo {
+    pub fn as_str(&mut self) -> &str {
+        &self.task
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -126,8 +152,8 @@ pub struct Remind {
 }
 
 impl Remind {
-    pub fn to_list(&self) -> impl Iterator<Item = &str> {
-        self.list.iter().map(|t| t.task.as_ref())
+    pub fn to_list(&mut self) -> impl Iterator<Item = &str> {
+        self.list.iter_mut().map(|t| t.as_str())
     }
 }
 
@@ -156,6 +182,7 @@ impl App {
                 date: chrono::Local::now(),
                 task: s.into(),
                 cmd: "".into(),
+                completed: false,
             })
             .collect::<Vec<_>>();
         let sticky_note = ListState::new(vec![
@@ -167,7 +194,7 @@ impl App {
             Remind {
                 title: "Note Two".into(),
                 note: "Things to not forget.".into(),
-                list: ListState::new(items.clone()),
+                list: ListState::new(items),
             },
         ]);
 
@@ -185,33 +212,71 @@ impl App {
     }
 
     pub fn on_up(&mut self) {
-        self.sticky_note.select_previous();
+        if self.new_todo {
+            self.add_todo.previous()
+        } else if self.new_reminder || self.new_note {
+            // do nothing TODO how to do this idomaticaly
+        } else {
+            self.sticky_note[self.tabs.index].list.select_previous()
+        }
     }
 
     pub fn on_down(&mut self) {
-        self.sticky_note.select_next();
+        if self.new_todo {
+            self.add_todo.next()
+        } else if self.new_reminder || self.new_note {
+            // do nothing TODO how to do this idomaticaly
+        } else {
+            self.sticky_note[self.tabs.index].list.select_next();
+        }
     }
-
+    /// TODO should any addition be reset here?
     pub fn on_right(&mut self) {
+        self.reset_addition();
         self.tabs.next();
     }
 
+    /// TODO should any addition be reset here?
     pub fn on_left(&mut self) {
+        self.reset_addition();
         self.tabs.previous();
+    }
+
+    fn reset_addition(&mut self) {
+        self.add_remind.title.clear();
+
+        self.add_todo.cmd.clear();
+        self.add_todo.task.clear();
+        self.add_todo.question_index = 0;
     }
 
     fn add_char(&mut self, c: char) {
         if self.new_reminder {
-
+            if c == '\n' {
+                self.sticky_note.items.push(Remind {
+                    title: self.add_remind.title.clone(),
+                    note: String::default(),
+                    list: ListState::default(),
+                });
+                self.tabs.titles.push(self.add_remind.title.clone());
+                self.add_remind.title.clear();
+                self.new_reminder = false;
+                return;
+            }
+            self.add_remind.title.push(c);
         } else if self.new_todo {
             if c == '\n' {
                 self.sticky_note[self.tabs.index].list.items.push(Todo {
                     date: chrono::Local::now(),
                     task: self.add_todo.task.clone(),
                     cmd: self.add_todo.cmd.clone(),
+                    completed: false,
                 });
                 self.add_todo.task.clear();
                 self.add_todo.cmd.clear();
+                self.add_todo.question_index = 0;
+                self.new_todo = false;
+                return;
             }
             if self.add_todo.question_index == 0 {
                 self.add_todo.task.push(c)
@@ -224,18 +289,49 @@ impl App {
     }
 
     pub fn on_key(&mut self, c: char) {
-        match c {
-            
-            _ => {}
+        self.add_char(c)
+    }
+
+    pub fn on_backspace(&mut self) {
+        if self.new_reminder {
+            self.add_remind.title.pop();
+        } else if self.new_todo {
+            if self.add_todo.question_index == 0 {
+                self.add_todo.task.pop();
+            } else {
+                self.add_todo.cmd.pop();
+            }
+        } else if self.new_note {
+            self.sticky_note[self.tabs.index].note.pop();
+        } else {
+            self.sticky_note[self.tabs.index].list.get_selected_mut().completed = true;
         }
+    }
+
+    pub fn reset_new_flag(&mut self) {
+        self.new_note = false;
+        self.new_reminder = false;
+        self.new_todo = false;
     }
 
     pub fn on_ctrl_key(&mut self, c: char) {
         match c {
             'q' => self.should_quit = true,
-            'a' => self.new_todo = !self.new_todo,
-            's' => self.new_reminder = !self.new_todo,
-            'd' => self.new_note = !self.new_note,
+            't' => {
+                let flag = self.new_todo;
+                self.reset_new_flag();
+                self.new_todo = !flag;
+            },
+            's' => {
+                let flag = self.new_reminder;
+                self.reset_new_flag();
+                self.new_reminder = !flag;
+            },
+            'n' => {
+                let flag = self.new_note;
+                self.reset_new_flag();
+                self.new_note = !flag;
+            },
             _ => {}
         }
     }
