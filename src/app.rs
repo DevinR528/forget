@@ -1,13 +1,15 @@
 use std::fs;
 use std::io;
-use std::path::Path;
 use std::ops::{Index, IndexMut};
+use std::path::Path;
+use std::process::{Child, Command, Stdio};
+use std::thread;
 
 use chrono::{offset::TimeZone, DateTime, Local};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{from_slice, from_str, to_string, to_vec};
 
-use crate::config::{CFG, open_cfg_file, save_cfg_file, AppConfig};
+use crate::config::{open_cfg_file, save_cfg_file, AppConfig, CFG};
 
 mod date_fmt {
     use super::*;
@@ -101,9 +103,6 @@ impl<I> ListState<I> {
     pub fn iter(&self) -> impl Iterator<Item = &I> {
         self.items.iter()
     }
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut I> {
-        self.items.iter_mut()
-    }
 }
 
 impl<I> Index<usize> for ListState<I> {
@@ -184,12 +183,6 @@ pub struct Remind {
     pub list: ListState<Todo>,
 }
 
-impl Remind {
-    pub fn to_list(&self) -> impl Iterator<Item = &str> {
-        self.list.iter().map(|t| t.as_str())
-    }
-}
-
 fn open_db() -> ListState<Remind> {
     let mut home = dirs::home_dir().expect("home dir not found");
     home.push(".forget");
@@ -232,7 +225,7 @@ fn save_db(notes: &ListState<Remind>) -> io::Result<()> {
 }
 
 #[derive(Debug)]
-pub struct App<'a> {
+pub struct App {
     pub title: String,
     pub tabs: TabsState,
     pub add_todo: AddTodo,
@@ -242,18 +235,20 @@ pub struct App<'a> {
     pub new_todo: bool,
     pub new_note: bool,
     pub sticky_note: ListState<Remind>,
-    pub config: AppConfig<'a>,
+    pub cmd_handle: Vec<thread::JoinHandle<Result<Child, io::Error>>>,
+    pub cmd_err: String,
+    pub config: AppConfig,
 }
 
-impl<'a> App<'a> {
+impl App {
     pub fn new() -> Self {
-        save_cfg_file(&CFG).expect("save cfg failed");
+        save_cfg_file().expect("save cfg failed");
 
         let sticky_note = open_db();
         let config = open_cfg_file();
 
         App {
-            title: config.title.into(),
+            title: config.title.clone(),
             add_todo: AddTodo::default(),
             add_remind: AddRemind::default(),
             should_quit: false,
@@ -262,6 +257,8 @@ impl<'a> App<'a> {
             new_todo: false,
             tabs: TabsState::new(sticky_note.items.iter().map(|n| n.title.clone()).collect()),
             sticky_note,
+            cmd_handle: Vec::default(),
+            cmd_err: String::default(),
             config,
         }
     }
@@ -305,6 +302,18 @@ impl<'a> App<'a> {
         self.add_todo.question_index = 0;
     }
 
+    fn run_cmd(&mut self, cmd: String) {
+        self.cmd_handle.push(thread::spawn(move || {
+            let cmd_args = &cmd.split_whitespace().collect::<Vec<_>>();
+            let mut cmd = Command::new(&cmd_args[0]);
+            let cmd = cmd
+                .args(&cmd_args[1..])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            cmd.spawn()
+        }));
+    }
+
     fn add_char(&mut self, c: char) {
         if self.new_reminder {
             if c == '\n' {
@@ -341,6 +350,15 @@ impl<'a> App<'a> {
         } else if self.new_note {
             self.sticky_note[self.tabs.index].note.push(c);
         }
+        if c == '\n' {
+            self.run_cmd(
+                self.sticky_note[self.tabs.index]
+                    .list
+                    .get_selected()
+                    .cmd
+                    .clone(),
+            )
+        }
     }
 
     pub fn on_key(&mut self, c: char) {
@@ -359,10 +377,15 @@ impl<'a> App<'a> {
         } else if self.new_note {
             self.sticky_note[self.tabs.index].note.pop();
         } else if self.sticky_note[self.tabs.index].list.len() > 0 {
+            let flag = self.sticky_note[self.tabs.index]
+                .list
+                .get_selected()
+                .completed;
+
             self.sticky_note[self.tabs.index]
                 .list
                 .get_selected_mut()
-                .completed = true;
+                .completed = !flag;
         }
     }
 
@@ -388,7 +411,12 @@ impl<'a> App<'a> {
 
     pub fn on_ctrl_key(&mut self, c: char) {
         match c {
-            'q' => self.should_quit = true,
+            'q' => {
+                self.should_quit = true;
+                for hndl in self.cmd_handle.drain(..) {
+                    hndl.join().unwrap().unwrap().kill().unwrap()
+                }
+            }
             c if c == self.config.new_todo_ctrl => {
                 let flag = self.new_todo;
                 self.reset_new_flag();
@@ -421,6 +449,6 @@ impl<'a> App<'a> {
     }
 
     pub fn on_tick(&mut self) {
-        // Update UI if needed
+        // self.cmd_handle
     }
 }

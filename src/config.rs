@@ -1,15 +1,13 @@
+use std::fmt;
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::ops::{Index, IndexMut};
 
-use chrono::{offset::TimeZone, DateTime, Local};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{from_slice, from_str, to_string, to_vec};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use termion::event::Key;
 use tui::style::{Color, Modifier, Style};
 
-use crate::app::{App, ListState, Remind, Todo};
+use crate::app::{ListState, Remind, Todo};
 
 /// A key.
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
@@ -86,7 +84,6 @@ impl Into<Key> for AppKey {
 }
 
 bitflags::bitflags! {
-    #[derive(Deserialize, Serialize)]
     pub struct AppMod: u16 {
         const BOLD = 0b0000_0000_0001;
         const DIM = 0b0000_0000_0010;
@@ -97,6 +94,68 @@ bitflags::bitflags! {
         const REVERSED = 0b0000_0100_0000;
         const HIDDEN = 0b0000_1000_0000;
         const CROSSED_OUT = 0b0001_0000_0000;
+    }
+}
+
+impl AppMod {
+    fn modifier(&self) -> &str {
+        match self.bits() {
+            1 => "BOLD",
+            2 => "DIM",
+            3 => "ITALIC",
+            4 => "UNDERLINED",
+            5 => "SLOW_BLINK",
+            6 => "RAPID_BLINK",
+            7 => "REVERSED",
+            8 => "HIDDEN",
+            9 => "CROSSED_OUT",
+            _ => "RESET",
+        }
+    }
+}
+
+impl Serialize for AppMod {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.modifier())
+    }
+}
+
+impl<'de> Deserialize<'de> for AppMod {
+    fn deserialize<D>(deserializer: D) -> Result<AppMod, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct AppModVisit;
+        impl<'de> Visitor<'de> for AppModVisit {
+            type Value = AppMod;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("One of 9 ascii text modifiers `BOLD, ITALIC, DIM, ect")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<AppMod, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "BOLD" => Ok(AppMod::BOLD),
+                    "DIM" => Ok(AppMod::DIM),
+                    "ITALIC" => Ok(AppMod::ITALIC),
+                    "UNDERLINED" => Ok(AppMod::UNDERLINED),
+                    "SLOW_BLINK" => Ok(AppMod::SLOW_BLINK),
+                    "RAPID_BLINK" => Ok(AppMod::RAPID_BLINK),
+                    "REVERSED" => Ok(AppMod::REVERSED),
+                    "HIDDEN" => Ok(AppMod::HIDDEN),
+                    "CROSSED_OUT" => Ok(AppMod::CROSSED_OUT),
+                    "RESET" => Ok(AppMod::empty()),
+                    _ => Err(serde::de::Error::unknown_field(value, &[""])),
+                }
+            }
+        }
+        deserializer.deserialize_str(AppModVisit)
     }
 }
 
@@ -117,7 +176,7 @@ impl Into<Modifier> for AppMod {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub enum AppColor {
     Reset,
     Black,
@@ -168,9 +227,9 @@ impl Into<Color> for AppColor {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct AppStyle {
-    fg: AppColor,
-    bg: AppColor,
-    modifier: AppMod,
+    pub fg: AppColor,
+    pub bg: AppColor,
+    pub modifier: AppMod,
 }
 
 impl Into<Style> for AppStyle {
@@ -192,8 +251,8 @@ pub struct ColorCfg {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct AppConfig<'a> {
-    pub title: &'a str,
+pub struct AppConfig {
+    pub title: String,
     pub new_sticky_note_ctrl: char,
     pub new_note_ctrl: char,
     pub new_todo_ctrl: char,
@@ -201,12 +260,13 @@ pub struct AppConfig<'a> {
     pub remove_todo: AppKey,
     pub remove_sticky_note_ctrl: char,
     pub save_state_to_db_ctrl: char,
+    pub exit_key_ctrl: char,
+    pub highlight_string: String,
     pub app_colors: ColorCfg,
 }
 
-const TITLE: &str = "Forget It";
-pub const CFG: AppConfig = AppConfig {
-    title: TITLE,
+thread_local! { pub static CFG: AppConfig = AppConfig {
+    title: "Forget It".into(),
     new_sticky_note_ctrl: 's',
     new_note_ctrl: 'n',
     new_todo_ctrl: 't',
@@ -214,6 +274,8 @@ pub const CFG: AppConfig = AppConfig {
     remove_todo: AppKey::Delete,
     remove_sticky_note_ctrl: 'k',
     save_state_to_db_ctrl: 'p',
+    exit_key_ctrl: 'q',
+    highlight_string: "\u{207E}".into(),
     app_colors: ColorCfg {
         normal: AppStyle {
             fg: AppColor::White,
@@ -236,7 +298,7 @@ pub const CFG: AppConfig = AppConfig {
             modifier: AppMod::BOLD,
         },
     },
-};
+}}
 
 thread_local! { pub static APP: ListState<Remind> = ListState {
     items: vec![ Remind {
@@ -327,7 +389,7 @@ thread_local! { pub static APP: ListState<Remind> = ListState {
     selected: 0
 }}
 
-pub fn save_cfg_file(cfg: &AppConfig) -> io::Result<()> {
+pub fn save_cfg_file() -> io::Result<()> {
     use std::io::Write;
 
     let mut home = dirs::home_dir().expect("home dir not found");
@@ -336,25 +398,26 @@ pub fn save_cfg_file(cfg: &AppConfig) -> io::Result<()> {
 
     // TODO make it negative
     if !Path::new("./config.json").exists() {
-        let json_str = serde_json::to_string_pretty(cfg).expect("serialization failed");
+        CFG.with(|cfg| {
+            let json_str = serde_json::to_string_pretty(cfg).expect("serialization failed");
 
-        let mut fd = fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open("./config.json")
-            .expect("open file failed");
+            let mut fd = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open("./config.json")
+                .expect("open file failed");
 
-        fd.write_all(json_str.as_bytes())
+            fd.write_all(json_str.as_bytes())
+        })
     } else {
         Ok(())
     }
 }
 
-pub fn open_cfg_file<'a>() -> AppConfig<'a> {
+pub fn open_cfg_file() -> AppConfig {
     let mut home = dirs::home_dir().expect("home dir not found");
     home.push(".forget");
     let json_raw = fs::read_to_string("./config.json").expect("failed to read database");
-    let s: &'a str = unsafe { std::mem::transmute(json_raw.as_str()) };
-    from_str::<AppConfig<'a>>(s).expect("deserialization failed")
+    serde_json::from_str::<AppConfig>(&json_raw).expect("deserialization failed")
 }

@@ -13,7 +13,7 @@ mod event;
 mod ux;
 mod widget;
 
-use app::{App, ListState, Remind, Todo};
+use app::App;
 use event::{Config, Event, EventHandle};
 
 fn main() -> Result<(), failure::Error> {
@@ -24,9 +24,11 @@ fn main() -> Result<(), failure::Error> {
         60
     };
 
+    let mut app = App::new();
+
     let events = EventHandle::with_config(Config {
         tick_rate: Duration::from_millis(tick_rate),
-        ..Config::default()
+        exit_key: termion::event::Key::Ctrl(app.config.exit_key_ctrl),
     });
 
     let stdout = io::stdout().into_raw_mode()?;
@@ -35,8 +37,6 @@ fn main() -> Result<(), failure::Error> {
     let mut terminal = Terminal::new(backend)?;
 
     terminal.clear()?;
-
-    let mut app = App::new();
 
     loop {
         ux::draw(&mut terminal, &mut app)?;
@@ -58,6 +58,8 @@ fn main() -> Result<(), failure::Error> {
             }
         }
         if app.should_quit {
+            events.shutdown();
+            terminal.clear()?;
             break;
         }
     }

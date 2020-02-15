@@ -3,10 +3,10 @@ use std::io;
 use tui::backend::Backend;
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Block, Borders, Paragraph, SelectableList, Sparkline, Tabs, Text, Widget};
+use tui::widgets::{Block, Borders, Paragraph, Tabs, Text, Widget};
 use tui::{Frame, Terminal};
 
-use super::app::{App, Todo};
+use super::app::App;
 use super::widget::TodoList;
 
 const ADD_REMIND: &str = "Title of Sticky Note";
@@ -19,11 +19,26 @@ pub fn draw<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(),
             .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
             .split(f.size());
 
+        // if all tabs fit on one row or split and draw two
+        // if chunks[0].width > app.tabs.titles.iter().map(|s| (s.chars().count() + 2) as u16).sum() {
         Tabs::default()
-            .block(Block::default().borders(Borders::ALL).title(&app.title))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(&app.title)
+                    .title_style(
+                        Style::default()
+                            .fg(app.config.app_colors.titles.fg.into())
+                            .modifier(app.config.app_colors.titles.modifier.into()),
+                    ),
+            )
             .titles(&app.tabs.titles)
-            .style(Style::default().fg(Color::Gray))
-            .highlight_style(Style::default().fg(Color::Cyan))
+            .style(Style::default().fg(app.config.app_colors.normal.fg.into()))
+            .highlight_style(
+                Style::default()
+                    .fg(app.config.app_colors.tabs.fg.into())
+                    .modifier(app.config.app_colors.tabs.modifier.into()),
+            )
             .select(app.tabs.index)
             .render(&mut f, chunks[0]);
 
@@ -64,15 +79,19 @@ where
                 .title(&todo.title)
                 .title_style(
                     Style::default()
-                        .bg(Color::LightBlue)
-                        .fg(Color::Black)
-                        .modifier(Modifier::BOLD),
+                        .bg(app.config.app_colors.titles.bg.into())
+                        .fg(app.config.app_colors.titles.fg.into())
+                        .modifier(app.config.app_colors.titles.modifier.into()),
                 ),
         )
-        // .items(&todo.to_list().collect::<Vec<_>>())
         .select(Some(app.sticky_note[app.tabs.index].list.selected))
-        .highlight_style(Style::default().fg(Color::Yellow).modifier(Modifier::BOLD))
-        .highlight_symbol("✏️")
+        .highlight_style(
+            Style::default()
+                .fg(app.config.app_colors.highlight.fg.into())
+                .bg(app.config.app_colors.highlight.bg.into())
+                .modifier(app.config.app_colors.highlight.modifier.into()),
+        )
+        .highlight_symbol(&app.config.highlight_string)
         .render(f, chunks[0]);
 
     draw_util_block(f, app, chunks[1])
@@ -183,14 +202,5 @@ where
             )
             .wrap(true)
             .render(f, area);
-    }
-}
-
-fn convert_text<'a>(pair: (usize, &'a mut Todo)) -> Text<'a> {
-    let (idx, todo) = pair;
-    if idx % 2 == 0 {
-        Text::styled(todo.as_str(), Style::default().fg(Color::Blue))
-    } else {
-        Text::styled(todo.as_str(), Style::default().fg(Color::Green))
     }
 }

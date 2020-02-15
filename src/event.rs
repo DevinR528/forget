@@ -1,9 +1,5 @@
 use std::io;
 use std::sync::mpsc;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
 use std::thread;
 use std::time::Duration;
 
@@ -20,7 +16,6 @@ pub enum Event<I> {
 pub struct EventHandle {
     recv: mpsc::Receiver<Event<Key>>,
     input_handle: thread::JoinHandle<()>,
-    ignore_exit_key: Arc<AtomicBool>,
     tick_handle: thread::JoinHandle<()>,
 }
 
@@ -30,37 +25,20 @@ pub struct Config {
     pub tick_rate: Duration,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            exit_key: Key::Char('q'),
-            tick_rate: Duration::from_millis(250),
-        }
-    }
-}
-
-impl Default for EventHandle {
-    fn default() -> Self {
-        EventHandle::with_config(Config::default())
-    }
-}
-
 impl EventHandle {
     pub fn with_config(cfg: Config) -> Self {
         let (send, recv) = mpsc::channel();
-        let ignore_exit_key = Arc::new(AtomicBool::default());
         let input_handle = {
-            let ignore_exit_key = ignore_exit_key.clone();
             let send = send.clone();
             thread::spawn(move || {
                 let stdin = io::stdin();
                 for ev in stdin.keys() {
                     match ev {
                         Ok(key) => {
-                            if let Err(e) = send.send(Event::Input(key)) {
+                            if let Err(_e) = send.send(Event::Input(key)) {
                                 return;
                             }
-                            if !ignore_exit_key.load(Ordering::Relaxed) && key == cfg.exit_key {
+                            if key == cfg.exit_key {
                                 return;
                             }
                         }
@@ -70,19 +48,16 @@ impl EventHandle {
             })
         };
         let tick_handle = {
-            let send = send.clone();
-            thread::spawn(move || {
-                let s = send.clone();
-                loop {
-                    s.send(Event::Tick).unwrap();
-                    thread::sleep(cfg.tick_rate);
+            thread::spawn(move || loop {
+                if let Err(_e) = send.send(Event::Tick) {
+                    return;
                 }
+                thread::sleep(cfg.tick_rate);
             })
         };
 
         EventHandle {
             recv,
-            ignore_exit_key,
             input_handle,
             tick_handle,
         }
@@ -92,11 +67,8 @@ impl EventHandle {
         self.recv.recv()
     }
 
-    pub fn disable_exit_key(&mut self) {
-        self.ignore_exit_key.store(true, Ordering::Relaxed)
-    }
-
-    pub fn enable_exit_key(&mut self) {
-        self.ignore_exit_key.store(false, Ordering::Relaxed)
+    pub fn shutdown(self) {
+        let _ = self.input_handle.join();
+        let _ = self.tick_handle.join();
     }
 }

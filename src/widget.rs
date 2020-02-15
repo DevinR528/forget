@@ -1,11 +1,10 @@
-use std::convert::AsRef;
 use std::iter::{self, Iterator};
 
 use unicode_width::UnicodeWidthStr;
 
 use tui::buffer::Buffer;
 use tui::layout::Rect;
-use tui::style::{Color, Modifier, Style};
+use tui::style::{Modifier, Style};
 use tui::widgets::{Block, List, Text, Widget};
 
 use super::app::Remind;
@@ -37,11 +36,6 @@ impl<'b> TodoList<'b> {
     }
     pub fn block(mut self, block: Block<'b>) -> TodoList<'b> {
         self.block = Some(block);
-        self
-    }
-
-    pub fn style(mut self, style: Style) -> TodoList<'b> {
-        self.style = style;
         self
     }
 
