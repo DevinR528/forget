@@ -130,7 +130,7 @@ where
         )
         .wrap(true)
         .render(f, area);
-    } else if app.new_todo {
+    } else if app.new_todo || app.edit_todo {
         let task = &app.add_todo.task;
         let cmd = &app.add_todo.cmd;
         let question = app.add_todo.question_index;

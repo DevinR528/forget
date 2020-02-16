@@ -36,6 +36,8 @@ In order to navigate around `forget`:
     - add new sticky note.
  * **ctrl-n**
     - add new todo item to current sticky note.
+ * **ctrl-e**
+    - edit currently selected todo item of current sticky note.
  * **ctrl-k**
     - add new note to current sticky note.
  * **ctrl-u**
@@ -54,6 +56,7 @@ DO NOT USE THEM FOR KEY MAPPINGS.
   "new_sticky_note_char_ctrl": "h",
   "new_note_char_ctrl": "k",
   "new_todo_char_ctrl": "n",
+  "edit_todo_char_ctrl": "e",
   "mark_done": "Backspace",
   "remove_todo": "Delete",
   "remove_sticky_note_char_ctrl": "u",

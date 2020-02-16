@@ -182,6 +182,7 @@ pub struct App {
     pub should_quit: bool,
     pub new_reminder: bool,
     pub new_todo: bool,
+    pub edit_todo: bool,
     pub new_note: bool,
     pub sticky_note: ListState<Remind>,
     pub cmd_handle: RefCell<Vec<thread::JoinHandle<Result<Child, io::Error>>>>,
@@ -210,6 +211,7 @@ impl App {
             new_reminder: false,
             new_note: false,
             new_todo: false,
+            edit_todo: false,
             tabs: TabsState::new(sticky_note.items.iter().map(|n| n.title.clone()).collect()),
             sticky_note,
             cmd_handle: RefCell::new(Vec::default()),
@@ -302,6 +304,32 @@ impl App {
             } else {
                 self.add_todo.cmd.push(c)
             }
+        } else if self.edit_todo && !self.sticky_note.is_empty() {
+            if c == '\n' {
+                let idx = self.sticky_note[self.tabs.index].list.selected;
+                let todo_len = self.sticky_note[self.tabs.index].list.items.len();
+                let todo_items = &mut self.sticky_note[self.tabs.index].list.items;
+
+                todo_items.push(Todo {
+                    date: chrono::Local::now(),
+                    task: self.add_todo.task.clone(),
+                    cmd: self.add_todo.cmd.clone(),
+                    completed: false,
+                });
+                todo_items.swap(idx, todo_len);
+                todo_items.pop();
+
+                self.add_todo.task.clear();
+                self.add_todo.cmd.clear();
+                self.add_todo.question_index = 0;
+                self.new_todo = false;
+            }
+
+            if self.add_todo.question_index == 0 {
+                self.add_todo.task.push(c)
+            } else {
+                self.add_todo.cmd.push(c)
+            }
         } else if self.new_note && !self.sticky_note.is_empty() {
             self.sticky_note[self.tabs.index].note.push(c);
         }
@@ -321,7 +349,7 @@ impl App {
     pub fn on_backspace(&mut self) {
         if self.new_reminder {
             self.add_remind.title.pop();
-        } else if self.new_todo {
+        } else if self.new_todo || self.edit_todo {
             if self.add_todo.question_index == 0 {
                 self.add_todo.task.pop();
             } else {
@@ -363,6 +391,7 @@ impl App {
         self.new_note = false;
         self.new_reminder = false;
         self.new_todo = false;
+        self.edit_todo = false;
     }
 
     pub fn on_ctrl_key(&mut self, c: char) {
@@ -375,21 +404,51 @@ impl App {
                     }
                 }
             }
+            // New Todo
             c if c == self.config.new_todo_char_ctrl => {
                 let flag = self.new_todo;
                 self.reset_new_flag();
                 self.new_todo = !flag;
             }
+            // Edit Todo
+            c if c == self.config.edit_todo_char_ctrl => {
+                let flag = self.edit_todo;
+                self.reset_new_flag();
+                self.edit_todo = !flag;
+
+                if self.edit_todo {
+                    self.add_todo.task = self.sticky_note.items
+                        .get(self.tabs.index)
+                        .map(|n| {
+                            n.list.get_selected()
+                                .map(|t| t.task.clone())
+                        })
+                        .flatten()
+                        .unwrap_or_default();
+                        
+                    self.add_todo.cmd = self.sticky_note.items
+                        .get(self.tabs.index)
+                        .map(|n| {
+                            n.list.get_selected()
+                                .map(|t| t.cmd.clone())
+                        })
+                        .flatten()
+                        .unwrap_or_default();
+                }
+            }
+            // New Sticky Note
             c if c == self.config.new_sticky_note_char_ctrl => {
                 let flag = self.new_reminder;
                 self.reset_new_flag();
                 self.new_reminder = !flag;
             }
+            // Add to or New Note
             c if c == self.config.new_note_char_ctrl => {
                 let flag = self.new_note;
                 self.reset_new_flag();
                 self.new_note = !flag;
             }
+            // Remove Sticky Note
             c if c == self.config.remove_sticky_note_char_ctrl => {
                 if !self.sticky_note.is_empty() {
                     let tab_idx = self.tabs.index;
@@ -399,6 +458,7 @@ impl App {
                     self.tabs.previous();
                 }
             }
+            // Save current Sticky Notes to DB
             c if c == self.config.save_state_to_db_char_ctrl => {
                 config::save_db(&self.sticky_note).expect("save to DB failed");
             }
