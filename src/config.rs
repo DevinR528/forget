@@ -1,8 +1,10 @@
 use std::fmt;
 use std::fs;
 use std::io;
+use std::io::Write;
 use std::path::Path;
 
+use chrono::Local;
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use termion::event::Key;
 use tui::style::{Color, Modifier, Style};
@@ -253,29 +255,29 @@ pub struct ColorCfg {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppConfig {
     pub title: String,
-    pub new_sticky_note_ctrl: char,
-    pub new_note_ctrl: char,
-    pub new_todo_ctrl: char,
+    pub new_sticky_note_char_ctrl: char,
+    pub new_note_char_ctrl: char,
+    pub new_todo_char_ctrl: char,
     pub mark_done: AppKey,
     pub remove_todo: AppKey,
-    pub remove_sticky_note_ctrl: char,
-    pub save_state_to_db_ctrl: char,
-    pub exit_key_ctrl: char,
+    pub remove_sticky_note_char_ctrl: char,
+    pub save_state_to_db_char_ctrl: char,
+    pub exit_key_char_ctrl: char,
     pub highlight_string: String,
     pub app_colors: ColorCfg,
 }
 
 thread_local! { pub static CFG: AppConfig = AppConfig {
     title: "Forget It".into(),
-    new_sticky_note_ctrl: 's',
-    new_note_ctrl: 'n',
-    new_todo_ctrl: 't',
+    new_sticky_note_char_ctrl: 'h',
+    new_note_char_ctrl: 'k',
+    new_todo_char_ctrl: 'n',
     mark_done: AppKey::Backspace,
     remove_todo: AppKey::Delete,
-    remove_sticky_note_ctrl: 'k',
-    save_state_to_db_ctrl: 'p',
-    exit_key_ctrl: 'q',
-    highlight_string: "\u{207E}".into(),
+    remove_sticky_note_char_ctrl: 'u',
+    save_state_to_db_char_ctrl: 's',
+    exit_key_char_ctrl: 'q',
+    highlight_string: "✔️".into(),
     app_colors: ColorCfg {
         normal: AppStyle {
             fg: AppColor::White,
@@ -303,59 +305,59 @@ thread_local! { pub static CFG: AppConfig = AppConfig {
 thread_local! { pub static APP: ListState<Remind> = ListState {
     items: vec![ Remind {
             title: "Note One".into(),
-            note: "You can add to the Notes by hitting ctrl-n.".into(),
+            note: "You can add to the Notes by hitting ctrl-k.".into(),
             list: ListState {
                 items: vec![
                     Todo {
-                        date: "2020-02-13 22:46:08".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
-                        task: "You can add a Sticky Note by hitting ctrl-s".into(),
+                        date: Local::now(),
+                        task: "You can add a Sticky Note by hitting ctrl-h".into(),
                         cmd: String::new(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 22:46:08".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
-                        task: "You can add a Todo by hitting ctrl-t".into(),
+                        date: Local::now(),
+                        task: "You can add a Todo by hitting ctrl-j".into(),
                         cmd: String::new(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 22:46:08".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
+                        date: Local::now(),
                         task: "You can check off a Todo by hitting Backspace".into(),
                         cmd: String::new(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 22:46:08".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
+                        date: Local::now(),
                         task: "You can delete a Todo by hitting Delete".into(),
                         cmd: String::new(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 22:46:08".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
-                        task: "You can delete a Sticky by hitting ctrl-k".into(),
+                        date: Local::now(),
+                        task: "You can delete a Sticky by hitting ctrl-u".into(),
                         cmd: String::new(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 22:46:08".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
-                        task: "You can save to the data base by hitting ctrl-p".into(),
+                        date: Local::now(),
+                        task: "You can save to the data base by hitting ctrl-s".into(),
                         cmd: String::new(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 22:46:08".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
+                        date: Local::now(),
                         task: "Oh you can exit by ctrl-q or Esc".into(),
                         cmd: String::new(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 23:28:13".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
-                        task: "You can add commands to run when selected with Enter.".into(),
+                        date: Local::now(),
+                        task: "Todo's can run commands when selected with Enter.".into(),
                         cmd: "sensible-browser https://github.com/DevinR528/forget".into(),
                         completed: false
                     }
                 ],
-                selected: 7
+                selected: 0
             }
         },
         Remind {
@@ -364,19 +366,19 @@ thread_local! { pub static APP: ListState<Remind> = ListState {
             list: ListState {
                 items: vec![
                     Todo {
-                        date: "2020-02-13 23:17:43".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
+                        date: Local::now(),
                         task: "First".into(),
                         cmd: "".into(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 23:17:45".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
+                        date: Local::now(),
                         task: "Second".into(),
                         cmd: "".into(),
                         completed: false
                     },
                     Todo {
-                        date: "2020-02-13 23:17:49".parse::<chrono::DateTime<chrono::Local>>().expect("failed"),
+                        date: Local::now(),
                         task: "Third".into(),
                         cmd: "".into(),
                         completed: false
@@ -390,22 +392,25 @@ thread_local! { pub static APP: ListState<Remind> = ListState {
 }}
 
 pub fn save_cfg_file() -> io::Result<()> {
-    use std::io::Write;
-
     let mut home = dirs::home_dir().expect("home dir not found");
     home.push(".forget");
     home.push("config.json");
 
-    // TODO make it negative
-    if !Path::new("./config.json").exists() {
-        CFG.with(|cfg| {
+    if !Path::new(&home).exists() {
+        let mut dir = home.clone();
+        dir.pop();
+        std::fs::create_dir_all(dir)?;
+
+        CFG.with(move |cfg| {
+            let home = home;
+            println!("{:?}", home);
             let json_str = serde_json::to_string_pretty(cfg).expect("serialization failed");
 
             let mut fd = fs::OpenOptions::new()
                 .create(true)
                 .write(true)
                 .truncate(true)
-                .open("./config.json")
+                .open(home)
                 .expect("open file failed");
 
             fd.write_all(json_str.as_bytes())
@@ -415,9 +420,50 @@ pub fn save_cfg_file() -> io::Result<()> {
     }
 }
 
-pub fn open_cfg_file() -> AppConfig {
-    let mut home = dirs::home_dir().expect("home dir not found");
+pub fn open_cfg_file() -> io::Result<AppConfig> {
+    let mut home = dirs::home_dir().unwrap();
     home.push(".forget");
-    let json_raw = fs::read_to_string("./config.json").expect("failed to read database");
-    serde_json::from_str::<AppConfig>(&json_raw).expect("deserialization failed")
+    home.push("config.json");
+
+    let json_raw = fs::read_to_string(home)?;
+    Ok(serde_json::from_str::<AppConfig>(&json_raw).expect("deserialization failed"))
+}
+
+pub fn open_db() -> io::Result<ListState<Remind>> {
+    let mut home = dirs::home_dir().unwrap();
+    home.push(".forget");
+    home.push("note_db.json");
+
+    if !Path::new(&home).exists() {
+        let mut dir = home.clone();
+        dir.pop();
+        std::fs::create_dir_all(dir)?;
+        APP.with(|app| {
+            let json_str = serde_json::to_string(&app).expect("serialization failed");
+            let mut fd = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&home)
+                .expect("open file failed");
+
+            fd.write_all(json_str.as_bytes()).expect("write failed");
+        });
+    }
+    let json_raw = fs::read_to_string(&home)?;
+    Ok(serde_json::from_str::<ListState<Remind>>(&json_raw).expect("deserialization failed"))
+}
+
+pub fn save_db(notes: &ListState<Remind>) -> io::Result<()> {
+    let mut home = dirs::home_dir().unwrap();
+    home.push(".forget");
+    home.push("note_db.json");
+
+    let json_str = serde_json::to_string(notes)?;
+    let mut fd = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(home)?;
+    fd.write_all(json_str.as_bytes())
 }

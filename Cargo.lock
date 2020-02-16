@@ -166,6 +166,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "forget"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "chrono",
+ "dirs",
+ "failure",
+ "serde",
+ "serde_json",
+ "termion",
+ "tui",
+ "unicode-width",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -190,21 +205,6 @@ name = "itoa"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8b7a7c0c47db5545ed3fef7468ee7bb5b74691498139e4b3f6a20685dc6dd8e"
-
-[[package]]
-name = "keep"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "chrono",
- "dirs",
- "failure",
- "serde",
- "serde_json",
- "termion",
- "tui",
- "unicode-width",
-]
 
 [[package]]
 name = "lazy_static"

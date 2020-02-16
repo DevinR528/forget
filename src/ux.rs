@@ -6,7 +6,7 @@ use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders, Paragraph, Tabs, Text, Widget};
 use tui::{Frame, Terminal};
 
-use super::app::App;
+use super::app::{App, Remind};
 use super::widget::TodoList;
 
 const ADD_REMIND: &str = "Title of Sticky Note";
@@ -70,9 +70,13 @@ where
         .direction(Direction::Horizontal)
         .split(chunks[0]);
 
-    let todo = &app.sticky_note[app.tabs.index];
+    let (todo, selected) = if let Some(todo) = app.sticky_note.items.get(app.tabs.index) {
+        (todo.clone(), todo.list.selected)
+    } else {
+        (Remind::default(), 0)
+    };
 
-    TodoList::new(todo)
+    TodoList::new(&todo)
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -84,7 +88,7 @@ where
                         .modifier(app.config.app_colors.titles.modifier.into()),
                 ),
         )
-        .select(Some(app.sticky_note[app.tabs.index].list.selected))
+        .select(Some(selected))
         .highlight_style(
             Style::default()
                 .fg(app.config.app_colors.highlight.fg.into())
@@ -187,7 +191,7 @@ where
             .wrap(true)
             .render(f, chunks[1]);
     } else {
-        let note = &app.sticky_note[app.tabs.index].note;
+        let note = &app.sticky_note.items.get(app.tabs.index).map(|n| n.note.clone()).unwrap_or_default();
         let text = Text::styled(note, Style::default().fg(Color::Green));
         Paragraph::new(vec![text].iter())
             .block(

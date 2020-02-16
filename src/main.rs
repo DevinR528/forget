@@ -24,11 +24,11 @@ fn main() -> Result<(), failure::Error> {
         60
     };
 
-    let mut app = App::new();
+    let mut app = App::new().expect("error from `forget`");
 
     let events = EventHandle::with_config(Config {
         tick_rate: Duration::from_millis(tick_rate),
-        exit_key: termion::event::Key::Ctrl(app.config.exit_key_ctrl),
+        exit_key: termion::event::Key::Ctrl(app.config.exit_key_char_ctrl),
     });
 
     let stdout = io::stdout().into_raw_mode()?;
@@ -58,7 +58,6 @@ fn main() -> Result<(), failure::Error> {
             }
         }
         if app.should_quit {
-            events.shutdown();
             terminal.clear()?;
             break;
         }

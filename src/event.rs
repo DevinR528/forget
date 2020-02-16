@@ -67,6 +67,7 @@ impl EventHandle {
         self.recv.recv()
     }
 
+    #[allow(dead_code)]
     pub fn shutdown(self) {
         let _ = self.input_handle.join();
         let _ = self.tick_handle.join();

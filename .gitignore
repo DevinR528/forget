@@ -3,3 +3,4 @@ target
 .vscode
 config.json
 note_db.json
+*.json

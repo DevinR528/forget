@@ -1,39 +1,13 @@
-use std::fs;
+use std::cell::RefCell;
 use std::io;
 use std::ops::{Index, IndexMut};
-use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::thread;
 
 use chrono::{offset::TimeZone, DateTime, Local};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{from_slice, from_str, to_string, to_vec};
 
-use crate::config::{open_cfg_file, save_cfg_file, AppConfig, CFG};
-
-mod date_fmt {
-    use super::*;
-
-    const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-
-    pub fn serialize<S>(date: &DateTime<Local>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let s = format!("{}", date.format(FORMAT));
-        serializer.serialize_str(&s)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Local>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Local
-            .datetime_from_str(&s, FORMAT)
-            .map_err(serde::de::Error::custom)
-    }
-}
+use crate::config::{self, AppConfig};
 
 #[derive(Clone, Debug)]
 pub struct TabsState {
@@ -50,10 +24,12 @@ impl TabsState {
     }
 
     pub fn previous(&mut self) {
-        if self.index > 0 {
-            self.index -= 1;
-        } else {
-            self.index = self.titles.len() - 1;
+        if !self.titles.is_empty() {
+            if self.index > 0 {
+                self.index -= 1;
+            } else {
+                self.index = self.titles.len() - 1;
+            }
         }
     }
 }
@@ -79,6 +55,10 @@ impl<I> ListState<I> {
         self.items.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
     pub fn select_previous(&mut self) {
         if self.selected != 0 {
             self.selected -= 1;
@@ -86,18 +66,18 @@ impl<I> ListState<I> {
     }
 
     pub fn select_next(&mut self) {
-        if self.len() == 0 {
+        if self.is_empty() {
             return;
         }
         if self.selected < self.len() - 1 {
             self.selected += 1
         }
     }
-    pub fn get_selected(&self) -> &I {
-        self.items.get(self.selected).unwrap()
+    pub fn get_selected(&self) -> Option<&I> {
+        self.items.get(self.selected)
     }
-    pub fn get_selected_mut(&mut self) -> &mut I {
-        self.items.get_mut(self.selected).unwrap()
+    pub fn get_selected_mut(&mut self) -> Option<&mut I> {
+        self.items.get_mut(self.selected)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &I> {
@@ -183,45 +163,14 @@ pub struct Remind {
     pub list: ListState<Todo>,
 }
 
-fn open_db() -> ListState<Remind> {
-    let mut home = dirs::home_dir().expect("home dir not found");
-    home.push(".forget");
-    home.push("note_db.json");
-
-    // TODO make it the right file
-    if !Path::new("./note_db.json").exists() {
-        use std::io::Write;
-        crate::config::APP.with(|app| {
-            let json_str = serde_json::to_string(&app).expect("serialization failed");
-            let mut fd = fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open("./note_db.json")
-                .expect("open file failed");
-
-            fd.write_all(json_str.as_bytes()).expect("write failed");
-        });
+impl Default for Remind {
+    fn default() -> Self {
+        Self {
+            title: String::default(),
+            note: String::default(),
+            list: ListState::default(),
+        }
     }
-
-    let json_raw = fs::read_to_string("./note_db.json").expect("failed to read database");
-    from_str::<ListState<Remind>>(&json_raw).expect("deserialization failed")
-}
-
-fn save_db(notes: &ListState<Remind>) -> io::Result<()> {
-    use std::io::Write;
-
-    let mut home = dirs::home_dir().expect("home dir not found");
-    home.push(".forget");
-
-    let json_str = serde_json::to_string(notes).expect("serialization failed");
-    let mut fd = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open("./note_db.json")
-        .expect("open file failed");
-    fd.write_all(json_str.as_bytes())
 }
 
 #[derive(Debug)]
@@ -235,19 +184,25 @@ pub struct App {
     pub new_todo: bool,
     pub new_note: bool,
     pub sticky_note: ListState<Remind>,
-    pub cmd_handle: Vec<thread::JoinHandle<Result<Child, io::Error>>>,
+    pub cmd_handle: RefCell<Vec<thread::JoinHandle<Result<Child, io::Error>>>>,
     pub cmd_err: String,
     pub config: AppConfig,
 }
 
 impl App {
-    pub fn new() -> Self {
-        save_cfg_file().expect("save cfg failed");
+    pub fn new() -> io::Result<Self> {
+        // this will return early if already present
+        // this creates the directory if needed
+        config::save_cfg_file()?;
 
-        let sticky_note = open_db();
-        let config = open_cfg_file();
+        // this will also save a new copy from
+        // `src/config.rs` thread_local APP
+        // if the file is not found
+        // also checks if the directory is needed
+        let sticky_note = config::open_db()?;
+        let config = config::open_cfg_file()?;
 
-        App {
+        Ok(App {
             title: config.title.clone(),
             add_todo: AddTodo::default(),
             add_remind: AddRemind::default(),
@@ -257,10 +212,10 @@ impl App {
             new_todo: false,
             tabs: TabsState::new(sticky_note.items.iter().map(|n| n.title.clone()).collect()),
             sticky_note,
-            cmd_handle: Vec::default(),
+            cmd_handle: RefCell::new(Vec::default()),
             cmd_err: String::default(),
             config,
-        }
+        })
     }
 
     pub fn on_up(&mut self) {
@@ -268,7 +223,7 @@ impl App {
             self.add_todo.previous()
         } else if self.new_reminder || self.new_note {
             // do nothing TODO how to do this idomaticaly
-        } else {
+        } else if !self.sticky_note.is_empty() {
             self.sticky_note[self.tabs.index].list.select_previous()
         }
     }
@@ -278,7 +233,7 @@ impl App {
             self.add_todo.next()
         } else if self.new_reminder || self.new_note {
             // do nothing TODO how to do this idomaticaly
-        } else {
+        } else if !self.sticky_note.is_empty() {
             self.sticky_note[self.tabs.index].list.select_next();
         }
     }
@@ -302,8 +257,8 @@ impl App {
         self.add_todo.question_index = 0;
     }
 
-    fn run_cmd(&mut self, cmd: String) {
-        self.cmd_handle.push(thread::spawn(move || {
+    fn run_cmd(&self, cmd: String) {
+        self.cmd_handle.borrow_mut().push(thread::spawn(move || {
             let cmd_args = &cmd.split_whitespace().collect::<Vec<_>>();
             let mut cmd = Command::new(&cmd_args[0]);
             let cmd = cmd
@@ -328,7 +283,7 @@ impl App {
                 return;
             }
             self.add_remind.title.push(c);
-        } else if self.new_todo {
+        } else if self.new_todo && !self.sticky_note.is_empty() {
             if c == '\n' {
                 self.sticky_note[self.tabs.index].list.items.push(Todo {
                     date: chrono::Local::now(),
@@ -340,24 +295,22 @@ impl App {
                 self.add_todo.cmd.clear();
                 self.add_todo.question_index = 0;
                 self.new_todo = false;
-                return;
             }
+
             if self.add_todo.question_index == 0 {
                 self.add_todo.task.push(c)
             } else {
                 self.add_todo.cmd.push(c)
             }
-        } else if self.new_note {
+        } else if self.new_note && !self.sticky_note.is_empty() {
             self.sticky_note[self.tabs.index].note.push(c);
         }
-        if c == '\n' {
-            self.run_cmd(
-                self.sticky_note[self.tabs.index]
-                    .list
-                    .get_selected()
-                    .cmd
-                    .clone(),
-            )
+        if c == '\n' && !self.sticky_note.is_empty() {
+            if let Some(todo) = self.sticky_note[self.tabs.index].list.get_selected() {
+                if !todo.cmd.trim().is_empty() {
+                    self.run_cmd(todo.cmd.clone());
+                }
+            }
         }
     }
 
@@ -374,30 +327,33 @@ impl App {
             } else {
                 self.add_todo.cmd.pop();
             }
-        } else if self.new_note {
+        } else if self.new_note && !self.sticky_note.is_empty() {
             self.sticky_note[self.tabs.index].note.pop();
-        } else if self.sticky_note[self.tabs.index].list.len() > 0 {
-            let flag = self.sticky_note[self.tabs.index]
-                .list
-                .get_selected()
-                .completed;
+        } else if !self.sticky_note.is_empty() {
+            if let Some(todo) = self.sticky_note[self.tabs.index].list.get_selected() {
+                let flag = todo.completed;
 
-            self.sticky_note[self.tabs.index]
-                .list
-                .get_selected_mut()
-                .completed = !flag;
+                self.sticky_note[self.tabs.index]
+                    .list
+                    .get_selected_mut()
+                    .unwrap()
+                    .completed = !flag;
+            }
         }
     }
 
     pub fn on_delete(&mut self) {
         if self.new_reminder || self.new_todo {
             self.reset_addition();
-        } else if self.new_note {
+        } else if self.new_note && !self.sticky_note.is_empty() {
             self.sticky_note[self.tabs.index].note.pop();
-        } else {
+        } else if !self.sticky_note.is_empty() {
             let idx = self.sticky_note[self.tabs.index].list.selected;
             if idx > 0 {
                 self.sticky_note[self.tabs.index].list.selected -= 1;
+            }
+            if self.sticky_note[self.tabs.index].list.is_empty() {
+                return;
             }
             self.sticky_note[self.tabs.index].list.items.remove(idx);
         }
@@ -413,36 +369,38 @@ impl App {
         match c {
             'q' => {
                 self.should_quit = true;
-                for hndl in self.cmd_handle.drain(..) {
-                    hndl.join().unwrap().unwrap().kill().unwrap()
+                for hndl in self.cmd_handle.get_mut().drain(..) {
+                    if let Ok(Ok(mut thread)) = hndl.join() {
+                        let _ = thread.kill();
+                    }
                 }
             }
-            c if c == self.config.new_todo_ctrl => {
+            c if c == self.config.new_todo_char_ctrl => {
                 let flag = self.new_todo;
                 self.reset_new_flag();
                 self.new_todo = !flag;
             }
-            c if c == self.config.new_sticky_note_ctrl => {
+            c if c == self.config.new_sticky_note_char_ctrl => {
                 let flag = self.new_reminder;
                 self.reset_new_flag();
                 self.new_reminder = !flag;
             }
-            c if c == self.config.new_note_ctrl => {
+            c if c == self.config.new_note_char_ctrl => {
                 let flag = self.new_note;
                 self.reset_new_flag();
                 self.new_note = !flag;
             }
-            c if c == self.config.remove_sticky_note_ctrl => {
-                if self.sticky_note.len() > 0 {
+            c if c == self.config.remove_sticky_note_char_ctrl => {
+                if !self.sticky_note.is_empty() {
                     let tab_idx = self.tabs.index;
                     self.sticky_note.items.remove(tab_idx);
-                    self.sticky_note.select_next();
+                    self.sticky_note.select_previous();
                     self.tabs.titles.remove(tab_idx);
                     self.tabs.previous();
                 }
             }
-            c if c == self.config.save_state_to_db_ctrl => {
-                save_db(&self.sticky_note).expect("save to DB failed");
+            c if c == self.config.save_state_to_db_char_ctrl => {
+                config::save_db(&self.sticky_note).expect("save to DB failed");
             }
             _ => {}
         }
@@ -450,5 +408,29 @@ impl App {
 
     pub fn on_tick(&mut self) {
         // self.cmd_handle
+    }
+}
+
+mod date_fmt {
+    use super::*;
+
+    const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+    pub fn serialize<S>(date: &DateTime<Local>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = format!("{}", date.format(FORMAT));
+        serializer.serialize_str(&s)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Local>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Local
+            .datetime_from_str(&s, FORMAT)
+            .map_err(serde::de::Error::custom)
     }
 }
