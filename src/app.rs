@@ -285,6 +285,7 @@ impl App {
                 return;
             }
             self.add_remind.title.push(c);
+            return;
         } else if self.new_todo && !self.sticky_note.is_empty() {
             if c == '\n' {
                 self.sticky_note[self.tabs.index].list.items.push(Todo {
@@ -297,6 +298,7 @@ impl App {
                 self.add_todo.cmd.clear();
                 self.add_todo.question_index = 0;
                 self.new_todo = false;
+                return;
             }
 
             if self.add_todo.question_index == 0 {
@@ -304,6 +306,7 @@ impl App {
             } else {
                 self.add_todo.cmd.push(c)
             }
+            return;
         } else if self.edit_todo && !self.sticky_note.is_empty() {
             if c == '\n' {
                 let idx = self.sticky_note[self.tabs.index].list.selected;
@@ -323,6 +326,7 @@ impl App {
                 self.add_todo.cmd.clear();
                 self.add_todo.question_index = 0;
                 self.new_todo = false;
+                return;
             }
 
             if self.add_todo.question_index == 0 {
@@ -330,8 +334,10 @@ impl App {
             } else {
                 self.add_todo.cmd.push(c)
             }
+            return;
         } else if self.new_note && !self.sticky_note.is_empty() {
             self.sticky_note[self.tabs.index].note.push(c);
+            return;
         }
         if c == '\n' && !self.sticky_note.is_empty() {
             if let Some(todo) = self.sticky_note[self.tabs.index].list.get_selected() {
