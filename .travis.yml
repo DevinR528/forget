@@ -4,9 +4,11 @@ language: rust
 
 rust:
   - stable
-  - beta
-  - nightly
+
+before_script:
+  - rustup component add rustfmt 
 
 script:
+  - rustup install rust
   - cargo check
   - cargo fmt -- --check
