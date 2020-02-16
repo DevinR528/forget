@@ -12,7 +12,7 @@ a command can be run when the item is selected (press Enter while highlighted) t
 process and will not affect the UI. `forget` is a multi-threaded application the UI event loop and input loop
 each run on a separate thread as well as any command spawned, everything is cleaned up when the main thread exits.
 
-![forget-demo](https://github.com/DevinR528/forget/resources/forget-demo.gif)
+![forget-demo](https://github.com/DevinR528/forget/blob/master/resources/forget-demo.gif)
 
 # Install
 ```bash

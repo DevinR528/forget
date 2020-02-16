@@ -318,7 +318,7 @@ thread_local! { pub static APP: ListState<Remind> = ListState {
                     },
                     Todo {
                         date: Local::now(),
-                        task: "You can add a Todo by hitting ctrl-j".into(),
+                        task: "You can add a Todo by hitting ctrl-n".into(),
                         cmd: String::new(),
                         completed: false
                     },

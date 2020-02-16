@@ -191,7 +191,12 @@ where
             .wrap(true)
             .render(f, chunks[1]);
     } else {
-        let note = &app.sticky_note.items.get(app.tabs.index).map(|n| n.note.clone()).unwrap_or_default();
+        let note = &app
+            .sticky_note
+            .items
+            .get(app.tabs.index)
+            .map(|n| n.note.clone())
+            .unwrap_or_default();
         let text = Text::styled(note, Style::default().fg(Color::Green));
         Paragraph::new(vec![text].iter())
             .block(

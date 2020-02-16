@@ -417,21 +417,19 @@ impl App {
                 self.edit_todo = !flag;
 
                 if self.edit_todo {
-                    self.add_todo.task = self.sticky_note.items
+                    self.add_todo.task = self
+                        .sticky_note
+                        .items
                         .get(self.tabs.index)
-                        .map(|n| {
-                            n.list.get_selected()
-                                .map(|t| t.task.clone())
-                        })
+                        .map(|n| n.list.get_selected().map(|t| t.task.clone()))
                         .flatten()
                         .unwrap_or_default();
-                        
-                    self.add_todo.cmd = self.sticky_note.items
+
+                    self.add_todo.cmd = self
+                        .sticky_note
+                        .items
                         .get(self.tabs.index)
-                        .map(|n| {
-                            n.list.get_selected()
-                                .map(|t| t.cmd.clone())
-                        })
+                        .map(|n| n.list.get_selected().map(|t| t.cmd.clone()))
                         .flatten()
                         .unwrap_or_default();
                 }

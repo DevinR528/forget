@@ -1,6 +1,6 @@
 [package]
 name = "forget"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Devin R <devin.ragotzy@gmail.com>"]
 license = "MIT/Apache-2.0"
 description = "Command line todo in Rust."
@@ -9,6 +9,7 @@ keywords = ["todo", "cli", "productivity", "console", "terminal"]
 categories = ["development-tools", "text-editors"]
 edition = "2018"
 readme = "README.md"
+exclude = [ "resources" ]
 
 [badges]
 travis-ci = { repository = "DevinR528/forget" }
