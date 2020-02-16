@@ -221,7 +221,7 @@ impl App {
     }
 
     pub fn on_up(&mut self) {
-        if self.new_todo {
+        if self.new_todo || self.edit_todo {
             self.add_todo.previous()
         } else if self.new_reminder || self.new_note {
             // do nothing TODO how to do this idomaticaly
@@ -231,7 +231,7 @@ impl App {
     }
 
     pub fn on_down(&mut self) {
-        if self.new_todo {
+        if self.new_todo || self.edit_todo {
             self.add_todo.next()
         } else if self.new_reminder || self.new_note {
             // do nothing TODO how to do this idomaticaly

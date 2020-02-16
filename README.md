@@ -21,7 +21,7 @@ cargo install forget
 
 # Run
 ```bash
-cargo install forget
+forget
 ```
 
 ## Use
