@@ -4,13 +4,16 @@
 [![Build Status](https://travis-ci.com/DevinR528/forget.svg?branch=master)](https://travis-ci.com/DevinR528/forget)
 [![Latest Version](https://img.shields.io/crates/v/forget.svg)](https://crates.io/crates/forget)
 
-A beautiful (thanks to [tui.rs]()) command line app to keep you from forgetting!! `forget`
+A beautiful (thanks to [tui.rs](https://github.com/fdehau/tui-rs)) command line app to keep you from forgetting!! `forget`
 uses [termion]() for rendering as such it is cross platform (fonts may differ). `forget` is __highly__
 customizable, key bindings, colors, icons, text and titles. `forget`'s configuration and "database" files will save
-to `$HOME/.forget/[file].json` this is where the config file can be edited. Along with each sticky note item
-a command can be run when the item is selected (press Enter while highlighted) this will run in a separate
-process and will not affect the UI. `forget` is a multi-threaded application the UI event loop and input loop
-each run on a separate thread as well as any command spawned, everything is cleaned up when the main thread exits.
+to $HOME/.forget/[file].json this is where the config file can be edited. `forget` is a multi-threaded application the
+UI event loop and input loop each run on a separate thread as well as any command spawned, everything is cleaned up
+when the main thread exits.
+
+`forget` keeps track of adding and removing sticky notes, sticky note items (todos), and editing the items that have
+been created. Along with each sticky note item a command can be run when the item is selected (press Enter while highlighted)
+this will run in a separate process and will not affect the UI.
 
 ![forget-demo](https://github.com/DevinR528/forget/blob/master/resources/forget-demo.gif)
 
