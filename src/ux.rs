@@ -104,10 +104,12 @@ where
 fn draw_util_block<B>(f: &mut Frame<B>, app: &App, area: Rect)
 where
     B: Backend,
-{
+{   
+    let highlight_style = app.config.app_colors.highlight.clone().into();
+    let normal_style: Style = app.config.app_colors.normal.clone().into();
+
     if app.new_reminder {
         let remind_title = &app.add_remind.title;
-        let highlight_style = Style::default().fg(Color::Yellow);
 
         Paragraph::new(
             vec![Text::styled(
@@ -123,9 +125,9 @@ where
                 .title(ADD_REMIND)
                 .title_style(
                     Style::default()
-                        .bg(Color::Black)
-                        .fg(Color::Yellow)
-                        .modifier(Modifier::BOLD),
+                        .bg(app.config.app_colors.titles.bg.into())
+                        .fg(app.config.app_colors.titles.fg.into())
+                        .modifier(highlight_style.modifier),
                 ),
         )
         .wrap(true)
@@ -135,62 +137,58 @@ where
         let cmd = &app.add_todo.cmd;
         let question = app.add_todo.question_index;
 
-        let highlight_style = Style::default().fg(Color::Yellow);
-        let normal_style = Style::default().fg(Color::White);
-
         let chunks = Layout::default()
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
             .direction(Direction::Vertical)
             .split(area);
 
+        let style = if question == 0 {
+            highlight_style
+        } else {
+            normal_style
+        };
         Paragraph::new(vec![Text::styled(task, Style::default().fg(Color::Green))].iter())
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(if question == 0 {
-                        highlight_style
-                    } else {
-                        normal_style
-                    })
+                    .border_style(style)
                     .title(ADD_TODO)
                     .title_style(
                         Style::default()
-                            .bg(Color::Black)
-                            .fg(if question == 0 {
-                                highlight_style.fg
-                            } else {
-                                normal_style.fg
-                            })
-                            .modifier(Modifier::BOLD),
+                            .bg(app.config.app_colors.titles.bg.into())
+                            .fg(app.config.app_colors.titles.fg.into())
+                            .modifier(style.modifier),
                     ),
             )
             .wrap(true)
             .render(f, chunks[0]);
 
+        let style = if question == 1 {
+            highlight_style
+        } else {
+            normal_style
+        };
         Paragraph::new(vec![Text::styled(cmd, Style::default().fg(Color::Green))].iter())
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(if question == 1 {
-                        highlight_style
-                    } else {
-                        normal_style
-                    })
+                    .border_style(style)
                     .title(ADD_CMD)
                     .title_style(
                         Style::default()
-                            .bg(Color::Black)
-                            .fg(if question == 0 {
-                                highlight_style.fg
-                            } else {
-                                normal_style.fg
-                            })
-                            .modifier(Modifier::BOLD),
+                            .bg(app.config.app_colors.titles.bg.into())
+                            .fg(app.config.app_colors.titles.fg.into())
+                            .modifier(style.modifier),
                     ),
             )
             .wrap(true)
             .render(f, chunks[1]);
     } else {
+        let style = if app.new_note {
+            highlight_style
+        } else {
+            normal_style
+        };
         let note = &app
             .sticky_note
             .items
@@ -202,12 +200,18 @@ where
             .block(
                 Block::default()
                     .borders(Borders::ALL)
+                    .border_style(style)
                     .title(if app.new_note {
                         "Add To Notes"
                     } else {
                         "Notes"
                     })
-                    .title_style(Style::default().bg(Color::LightBlue).fg(Color::Black)),
+                    .title_style(
+                        Style::default()
+                            .bg(app.config.app_colors.titles.bg.into())
+                            .fg(app.config.app_colors.titles.fg.into())
+                            .modifier(style.modifier),
+                    ),
             )
             .wrap(true)
             .render(f, area);

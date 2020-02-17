@@ -5,6 +5,7 @@ use unicode_width::UnicodeWidthStr;
 use tui::buffer::Buffer;
 use tui::layout::Rect;
 use tui::style::{Modifier, Style};
+use tui::symbols::line;
 use tui::widgets::{Block, List, Text, Widget};
 
 use super::app::Remind;
@@ -119,5 +120,130 @@ impl<'b> Widget for TodoList<'b> {
             .block(self.block.unwrap_or_default())
             .style(self.style)
             .draw(area, buf);
+    }
+}
+
+pub struct TabsWrapped<'a, T>
+where
+    T: AsRef<str> + 'a,
+{
+    /// A block to wrap this widget in if necessary
+    block: Option<Block<'a>>,
+    /// One title for each tab
+    titles: &'a [T],
+    /// Wraps the tab bar when the length of tab chars overflows
+    /// witdth of enclosing `Block`.
+    wrap: bool,
+    /// The index of the selected tabs
+    selected: usize,
+    /// The style used to draw the text
+    style: Style,
+    /// The style used to display the selected item
+    highlight_style: Style,
+    /// Tab divider
+    divider: &'a str,
+}
+
+impl<'a, T> Default for TabsWrapped<'a, T>
+where
+    T: AsRef<str>,
+{
+    fn default() -> TabsWrapped<'a, T> {
+        TabsWrapped {
+            block: None,
+            titles: &[],
+            wrap: false,
+            selected: 0,
+            style: Default::default(),
+            highlight_style: Default::default(),
+            divider: line::VERTICAL,
+        }
+    }
+}
+
+impl<'a, T> TabsWrapped<'a, T>
+where
+    T: AsRef<str>,
+{
+    pub fn block(mut self, block: Block<'a>) -> TabsWrapped<'a, T> {
+        self.block = Some(block);
+        self
+    }
+
+    pub fn titles(mut self, titles: &'a [T]) -> TabsWrapped<'a, T> {
+        self.titles = titles;
+        self
+    }
+
+    pub fn wrap(mut self, wrap: bool) -> TabsWrapped<'a, T> {
+        self.wrap = wrap;
+        self
+    }
+
+    pub fn select(mut self, selected: usize) -> TabsWrapped<'a, T> {
+        self.selected = selected;
+        self
+    }
+
+    pub fn style(mut self, style: Style) -> TabsWrapped<'a, T> {
+        self.style = style;
+        self
+    }
+
+    pub fn highlight_style(mut self, style: Style) -> TabsWrapped<'a, T> {
+        self.highlight_style = style;
+        self
+    }
+
+    pub fn divider(mut self, divider: &'a str) -> TabsWrapped<'a, T> {
+        self.divider = divider;
+        self
+    }
+}
+
+impl<'a, T> Widget for TabsWrapped<'a, T>
+where
+    T: AsRef<str>,
+{
+    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+        let tabs_area = match self.block {
+            Some(ref mut b) => {
+                b.draw(area, buf);
+                b.inner(area)
+            }
+            None => area,
+        };
+
+        if tabs_area.height < 1 {
+            return;
+        }
+
+        self.background(tabs_area, buf, self.style.bg);
+
+        let mut x = tabs_area.left();
+        let titles_length = self.titles.len();
+        let divider_width = self.divider.width() as u16;
+        for (title, style, last_title) in self.titles.iter().enumerate().map(|(i, t)| {
+            let lt = i + 1 == titles_length;
+            if i == self.selected {
+                (t, self.highlight_style, lt)
+            } else {
+                (t, self.style, lt)
+            }
+        }) {
+            x += 1;
+            if x > tabs_area.right() {
+                break;
+            } else {
+                buf.set_string(x, tabs_area.top(), title.as_ref(), style);
+                x += title.as_ref().width() as u16 + 1;
+                if x >= tabs_area.right() || last_title {
+                    break;
+                } else {
+                    buf.set_string(x, tabs_area.top(), self.divider, self.style);
+                    x += divider_width;
+                }
+            }
+        }
     }
 }
