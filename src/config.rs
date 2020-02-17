@@ -250,6 +250,7 @@ pub struct ColorCfg {
     pub highlight: AppStyle,
     pub tabs: AppStyle,
     pub titles: AppStyle,
+    pub text: AppStyle,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -300,6 +301,11 @@ thread_local! { pub static CFG: AppConfig = AppConfig {
             fg: AppColor::Red,
             bg: AppColor::Reset,
             modifier: AppMod::BOLD,
+        },
+        text: AppStyle {
+            fg: AppColor::Green,
+            bg: AppColor::Reset,
+            modifier: AppMod::ITALIC,
         },
     },
 }}

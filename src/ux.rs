@@ -2,7 +2,7 @@ use std::io;
 
 use tui::backend::Backend;
 use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::style::{Color, Modifier, Style};
+use tui::style::Style;
 use tui::widgets::{Block, Borders, Paragraph, Tabs, Text, Widget};
 use tui::{Frame, Terminal};
 
@@ -87,6 +87,12 @@ where
                 ),
         )
         .select(Some(selected))
+        .style(
+            Style::default()
+                .bg(app.config.app_colors.text.bg.into())
+                .fg(app.config.app_colors.text.fg.into())
+                .modifier(app.config.app_colors.text.modifier.into()),
+        )
         .highlight_style(
             Style::default()
                 .fg(app.config.app_colors.highlight.fg.into())
@@ -102,7 +108,7 @@ where
 fn draw_util_block<B>(f: &mut Frame<B>, app: &App, area: Rect)
 where
     B: Backend,
-{   
+{
     let highlight_style = app.config.app_colors.highlight.clone().into();
     let normal_style: Style = app.config.app_colors.normal.clone().into();
 
@@ -112,7 +118,7 @@ where
         Paragraph::new(
             vec![Text::styled(
                 remind_title,
-                Style::default().fg(Color::Green),
+                Style::default().fg(app.config.app_colors.text.fg.into()),
             )]
             .iter(),
         )
@@ -145,42 +151,54 @@ where
         } else {
             normal_style
         };
-        Paragraph::new(vec![Text::styled(task, Style::default().fg(Color::Green))].iter())
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(style)
-                    .title(ADD_TODO)
-                    .title_style(
-                        Style::default()
-                            .bg(app.config.app_colors.titles.bg.into())
-                            .fg(app.config.app_colors.titles.fg.into())
-                            .modifier(style.modifier),
-                    ),
-            )
-            .wrap(true)
-            .render(f, chunks[0]);
+        Paragraph::new(
+            vec![Text::styled(
+                task,
+                Style::default().fg(app.config.app_colors.text.fg.into()),
+            )]
+            .iter(),
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(style)
+                .title(ADD_TODO)
+                .title_style(
+                    Style::default()
+                        .bg(app.config.app_colors.titles.bg.into())
+                        .fg(app.config.app_colors.titles.fg.into())
+                        .modifier(style.modifier),
+                ),
+        )
+        .wrap(true)
+        .render(f, chunks[0]);
 
         let style = if question == 1 {
             highlight_style
         } else {
             normal_style
         };
-        Paragraph::new(vec![Text::styled(cmd, Style::default().fg(Color::Green))].iter())
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(style)
-                    .title(ADD_CMD)
-                    .title_style(
-                        Style::default()
-                            .bg(app.config.app_colors.titles.bg.into())
-                            .fg(app.config.app_colors.titles.fg.into())
-                            .modifier(style.modifier),
-                    ),
-            )
-            .wrap(true)
-            .render(f, chunks[1]);
+        Paragraph::new(
+            vec![Text::styled(
+                cmd,
+                Style::default().fg(app.config.app_colors.text.fg.into()),
+            )]
+            .iter(),
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(style)
+                .title(ADD_CMD)
+                .title_style(
+                    Style::default()
+                        .bg(app.config.app_colors.titles.bg.into())
+                        .fg(app.config.app_colors.titles.fg.into())
+                        .modifier(style.modifier),
+                ),
+        )
+        .wrap(true)
+        .render(f, chunks[1]);
     } else {
         let style = if app.new_note {
             highlight_style
@@ -193,7 +211,10 @@ where
             .get(app.tabs.index)
             .map(|n| n.note.clone())
             .unwrap_or_default();
-        let text = Text::styled(note, Style::default().fg(Color::Green));
+        let text = Text::styled(
+            note,
+            Style::default().fg(app.config.app_colors.text.fg.into()),
+        );
         Paragraph::new(vec![text].iter())
             .block(
                 Block::default()

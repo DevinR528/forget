@@ -88,6 +88,11 @@ DO NOT USE THEM FOR KEY MAPPINGS.
       "fg": "Red",
       "bg": "Reset",
       "modifier": "BOLD"
+    },
+    "text": {
+      "fg": "Green",
+      "bg": "Reset",
+      "modifier": "UNDERLINED"
     }
   }
 }
