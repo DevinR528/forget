@@ -123,6 +123,11 @@ impl<'b> Widget for TodoList<'b> {
     }
 }
 
+struct Wrapper {
+    wrap: bool,
+    rows: u16,
+}
+
 pub struct TabsWrapped<'a, T>
 where
     T: AsRef<str> + 'a,
@@ -133,7 +138,7 @@ where
     titles: &'a [T],
     /// Wraps the tab bar when the length of tab chars overflows
     /// witdth of enclosing `Block`.
-    wrap: bool,
+    wrap: Wrapper,
     /// The index of the selected tabs
     selected: usize,
     /// The style used to draw the text
@@ -152,7 +157,7 @@ where
         TabsWrapped {
             block: None,
             titles: &[],
-            wrap: false,
+            wrap: Wrapper { wrap: false, rows: 0, },
             selected: 0,
             style: Default::default(),
             highlight_style: Default::default(),
@@ -175,8 +180,8 @@ where
         self
     }
 
-    pub fn wrap(mut self, wrap: bool) -> TabsWrapped<'a, T> {
-        self.wrap = wrap;
+    pub fn wrap(mut self, wrap: bool, rows: u16) -> TabsWrapped<'a, T> {
+        self.wrap = Wrapper { wrap, rows, };
         self
     }
 
@@ -206,44 +211,177 @@ where
     T: AsRef<str>,
 {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        let tabs_area = match self.block {
-            Some(ref mut b) => {
-                b.draw(area, buf);
-                b.inner(area)
-            }
-            None => area,
+        let overflow = {
+            area.width as usize <= self.titles.iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let space = if i % 2 == 0 {
+                        3
+                    } else {
+                        2
+                    };
+                    s.as_ref().width() + space
+                })
+                .sum()
         };
+        if self.wrap.wrap && overflow {
+            let tabs_area = match self.block {
+                Some(ref mut b) => {
+                    b.draw(area, buf);
+                    b.inner(area)
+                }
+                None => area,
+            };
 
-        if tabs_area.height < 1 {
-            return;
-        }
-
-        self.background(tabs_area, buf, self.style.bg);
-
-        let mut x = tabs_area.left();
-        let titles_length = self.titles.len();
-        let divider_width = self.divider.width() as u16;
-        for (title, style, last_title) in self.titles.iter().enumerate().map(|(i, t)| {
-            let lt = i + 1 == titles_length;
-            if i == self.selected {
-                (t, self.highlight_style, lt)
-            } else {
-                (t, self.style, lt)
+            if tabs_area.height < 1 {
+                return;
             }
-        }) {
-            x += 1;
-            if x > tabs_area.right() {
-                break;
-            } else {
-                buf.set_string(x, tabs_area.top(), title.as_ref(), style);
-                x += title.as_ref().width() as u16 + 1;
-                if x >= tabs_area.right() || last_title {
+
+            self.background(tabs_area, buf, self.style.bg);
+
+            let mut x = tabs_area.left();
+            let mut y = tabs_area.top();
+            let titles_length = self.titles.len();
+            let divider_width = self.divider.width() as u16;
+            let title_style_iter = self.titles.iter()
+                .zip(self.titles.iter().skip(1))
+                .enumerate()
+                .map(|(i, t)| {
+                    let lt = i + 1 == titles_length;
+                    if i == self.selected {
+                        (t, self.highlight_style, lt)
+                    } else {
+                        (t, self.style, lt)
+                    }
+                });
+            for ((title, next_title), style, last_title) in title_style_iter {
+                let title_len = title.as_ref().width() as u16 + 1;
+                x += 1;
+
+                if x + title_len >= tabs_area.right() {
+                    y += 1;
+                    x = tabs_area.left() + 1;
+                }
+                if y > self.wrap.rows {
                     break;
+                }
+
+                buf.set_string(x, y, title.as_ref(), style);
+                x += title.as_ref().width() as u16 + 1;
+
+                let has_overflow = x + next_title.as_ref().width() as u16 + 1 >= tabs_area.right();
+                let last_wrap_row = y + 1 > self.wrap.rows && has_overflow;
+                println!(
+                    "title={}\nover={} last={}\narea={:?} x={} next={}\n",
+                    title.as_ref(),
+                    has_overflow,
+                    last_wrap_row,
+                    tabs_area,
+                    x,
+                    x + next_title.as_ref().width() as u16 + 1,
+                );
+                if x >= tabs_area.right() || last_title || has_overflow || last_wrap_row {
+                    continue;
                 } else {
-                    buf.set_string(x, tabs_area.top(), self.divider, self.style);
+                    buf.set_string(x, y, self.divider, self.style);
                     x += divider_width;
                 }
             }
+        } else {
+            let tabs_area = match self.block {
+                Some(ref mut b) => {
+                    b.draw(area, buf);
+                    b.inner(area)
+                }
+                None => area,
+            };
+
+            if tabs_area.height < 1 {
+                return;
+            }
+
+            self.background(tabs_area, buf, self.style.bg);
+
+            let mut x = tabs_area.left();
+            let titles_length = self.titles.len();
+            let divider_width = self.divider.width() as u16;
+            for (title, style, last_title) in self.titles.iter().enumerate().map(|(i, t)| {
+                let lt = i + 1 == titles_length;
+                if i == self.selected {
+                    (t, self.highlight_style, lt)
+                } else {
+                    (t, self.style, lt)
+                }
+            }) {
+                x += 1;
+                if x > tabs_area.right() {
+                    break;
+                } else {
+                    buf.set_string(x, tabs_area.top(), title.as_ref(), style);
+                    x += title.as_ref().width() as u16 + 1;
+                    if x >= tabs_area.right() || last_title {
+                        break;
+                    } else {
+                        buf.set_string(x, tabs_area.top(), self.divider, self.style);
+                        x += divider_width;
+                    }
+                }
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tui::backend::TestBackend;
+    use tui::buffer::Buffer;
+    use tui::layout::Alignment;
+    use tui::widgets::{Block, Borders, Paragraph, Text, Widget};
+    use tui::Terminal;
+
+    #[test]
+    fn paragraph_render_wrap() {
+        let render = || {
+            let backend = TestBackend::new(20, 10);
+            let mut terminal = Terminal::new(backend).unwrap();
+
+            terminal
+                .draw(|mut f| {
+                    let size = f.size();
+                    let text = [
+                        "123",
+                        "678",
+                        "123",
+                        "78",
+                        "1234",
+                        "7890",
+                        "0000",
+                    ];
+                    TabsWrapped::default()
+                        .titles(&text)
+                        .block(Block::default().borders(Borders::ALL))
+                        .wrap(true, 2)
+                        .render(&mut f, size);
+                })
+                .unwrap();
+            terminal.backend().buffer().clone()
+        };
+        println!("{:?}", render());
+        assert_eq!(
+            render(),
+            Buffer::with_lines(vec![
+                   "┌──────────────────┐",
+                   "│ 123 │ 789 │ 123  │",
+                   "│ 78 │ 1234        │",
+                   "│                  │",
+                   "│                  │",
+                   "│                  │",
+                   "│                  │",
+                   "│                  │",
+                   "│                  │",
+                   "└──────────────────┘",
+            ])
+        );
     }
 }

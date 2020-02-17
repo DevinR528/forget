@@ -19,8 +19,6 @@ pub fn draw<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(),
             .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
             .split(f.size());
 
-        // if all tabs fit on one row or split and draw two
-        // if chunks[0].width > app.tabs.titles.iter().map(|s| (s.chars().count() + 2) as u16).sum() {
         Tabs::default()
             .block(
                 Block::default()
