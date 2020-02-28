@@ -68,6 +68,7 @@ DO NOT USE THEM FOR KEY MAPPINGS.
   "save_state_to_db_char_ctrl": "s",
   "exit_key_char_ctrl": "q",
   "highlight_string": "✔️",
+  "command_string": "💾",
   "app_colors": {
     "normal": {
       "fg": "White",
