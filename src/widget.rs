@@ -21,6 +21,8 @@ pub struct TodoList<'b> {
     highlight_style: Style,
     /// Symbol in front of the selected item (Shift all items to the right)
     highlight_symbol: Option<&'b str>,
+    /// Symbol in front of the selected item (Shift all items to the right)
+    cmd_symbol: Option<&'b str>,
 }
 
 impl<'b> TodoList<'b> {
@@ -32,6 +34,7 @@ impl<'b> TodoList<'b> {
             style: Default::default(),
             highlight_style: Default::default(),
             highlight_symbol: None,
+            cmd_symbol: None,
         }
     }
     pub fn block(mut self, block: Block<'b>) -> TodoList<'b> {
@@ -46,6 +49,11 @@ impl<'b> TodoList<'b> {
 
     pub fn highlight_symbol(mut self, highlight_symbol: &'b str) -> TodoList<'b> {
         self.highlight_symbol = Some(highlight_symbol);
+        self
+    }
+
+    pub fn cmd_symbol(mut self, cmd_symbol: &'b str) -> TodoList<'b> {
+        self.cmd_symbol = Some(cmd_symbol);
         self
     }
 
@@ -96,24 +104,34 @@ impl<'b> Widget for TodoList<'b> {
             .iter()
             .enumerate()
             .map(|(i, todo)| {
+                let mut cmd_symbol = if !todo.cmd.is_empty() {
+                    self.cmd_symbol.unwrap_or_default().to_string()
+                } else {
+                    String::default()
+                };
+                if !cmd_symbol.is_empty() {
+                    cmd_symbol = format!(" {}", cmd_symbol);
+                }
+
                 let strike = if todo.completed {
                     Modifier::CROSSED_OUT
                 } else {
                     Modifier::ITALIC
                 };
+
                 if let Some(s) = selected {
                     if i == s {
                         let style = Style::default()
                             .bg(highlight_style.bg)
                             .fg(highlight_style.fg)
                             .modifier(strike);
-                        Text::styled(format!("{} {}", highlight_symbol, todo.as_str()), style)
+                        Text::styled(format!("{} {}{}", highlight_symbol, todo.as_str(), cmd_symbol), style)
                     } else {
                         let style = Style::default()
                             .bg(self.style.bg)
                             .fg(self.style.fg)
                             .modifier(strike);
-                        Text::styled(format!("{} {}", blank_symbol, todo.as_str()), style)
+                        Text::styled(format!("{} {}{}", blank_symbol, todo.as_str(), cmd_symbol), style)
                     }
                 } else {
                     Text::styled(todo.as_str().to_string(), self.style)

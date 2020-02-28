@@ -21,7 +21,7 @@ fn main() -> Result<(), failure::Error> {
     let tick_rate = if let Some(tick) = args.find(|arg| arg.parse::<u64>().is_ok()) {
         tick.parse()?
     } else {
-        60
+        250
     };
 
     let mut app = App::new().expect("error from `forget`");

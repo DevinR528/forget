@@ -7,7 +7,7 @@
 A beautiful (thanks to [tui.rs](https://github.com/fdehau/tui-rs)) command line app to keep you from forgetting!! `forget`
 uses [termion]() for rendering as such it is cross platform (fonts may differ). `forget` is __highly__
 customizable, key bindings, colors, icons, text and titles. `forget`'s configuration and "database" files will save
-to $HOME/.forget/[file].json this is where the config file can be edited. `forget` is a multi-threaded application the
+to $HOME/.forget/ this is where the config file can be edited. `forget` is a multi-threaded application the
 UI event loop and input loop each run on a separate thread as well as any command spawned, everything is cleaned up
 when the main thread exits.
 

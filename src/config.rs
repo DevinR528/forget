@@ -266,6 +266,7 @@ pub struct AppConfig {
     pub save_state_to_db_char_ctrl: char,
     pub exit_key_char_ctrl: char,
     pub highlight_string: String,
+    pub command_string: String,
     pub app_colors: ColorCfg,
 }
 
@@ -281,6 +282,7 @@ thread_local! { pub static CFG: AppConfig = AppConfig {
     save_state_to_db_char_ctrl: 's',
     exit_key_char_ctrl: 'q',
     highlight_string: "✔️".into(),
+    command_string: "💾".into(),
     app_colors: ColorCfg {
         normal: AppStyle {
             fg: AppColor::White,

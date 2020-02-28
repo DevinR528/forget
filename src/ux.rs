@@ -100,6 +100,7 @@ where
                 .modifier(app.config.app_colors.highlight.modifier.into()),
         )
         .highlight_symbol(&app.config.highlight_string)
+        .cmd_symbol(&app.config.command_string)
         .render(f, chunks[0]);
 
     draw_util_block(f, app, chunks[1])
