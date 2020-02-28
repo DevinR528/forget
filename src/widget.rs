@@ -125,13 +125,19 @@ impl<'b> Widget for TodoList<'b> {
                             .bg(highlight_style.bg)
                             .fg(highlight_style.fg)
                             .modifier(strike);
-                        Text::styled(format!("{} {}{}", highlight_symbol, todo.as_str(), cmd_symbol), style)
+                        Text::styled(
+                            format!("{} {}{}", highlight_symbol, todo.as_str(), cmd_symbol),
+                            style,
+                        )
                     } else {
                         let style = Style::default()
                             .bg(self.style.bg)
                             .fg(self.style.fg)
                             .modifier(strike);
-                        Text::styled(format!("{} {}{}", blank_symbol, todo.as_str(), cmd_symbol), style)
+                        Text::styled(
+                            format!("{} {}{}", blank_symbol, todo.as_str(), cmd_symbol),
+                            style,
+                        )
                     }
                 } else {
                     Text::styled(todo.as_str().to_string(), self.style)
